@@ -2,6 +2,7 @@
 data/*
 !data/cifar10/wnids.txt
 !data/cifar100/wnids.txt
+!data/tiny-imagenet-200-custom/wnids.txt
 checkpoint
 out/*
 
