@@ -19,7 +19,9 @@ import random
 
 __all__ = names = ('CIFAR10IncludeLabels',
                    'CIFAR100IncludeLabels', 'TinyImagenet200IncludeLabels',
-                   'Imagenet1000IncludeLabels', 'CIFAR10ExcludeLabels',
+                   'Imagenet1000IncludeLabels','CIFAR10IncludeClasses',
+                   'CIFAR100IncludeClasses', 'TinyImagenet200IncludeClasses',
+                   'Imagenet1000IncludeClasses', 'CIFAR10ExcludeLabels',
                    'CIFAR100ExcludeLabels', 'TinyImagenet200ExcludeLabels',
                    'Imagenet1000ExcludeLabels', 'CIFAR10ResampleLabels',
                    'CIFAR100ResampleLabels', 'TinyImagenet200ResampleLabels',
@@ -31,14 +33,14 @@ def add_arguments(parser):
     parser.add_argument('--probability-labels', nargs='*', type=float)
     parser.add_argument('--include-labels', nargs='*', type=int)
     parser.add_argument('--exclude-labels', nargs='*', type=int)
-    parser.add_argument('--include-classes', nargs='*', type=int)
+    parser.add_argument('--include-classes', nargs='*', type=str)
 
 
 def set_default_values(args):
-    paths = DATASET_TO_PATHS[args.dataset]
-    if not args.path_graph and args.loss != 'CrossEntropyLoss':
+    paths = DATASET_TO_PATHS[args.dataset.replace('IncludeLabels', '').replace('IncludeClasses', '').replace('ExcludeLabels', '').replace('ResampleLabels', '')]
+    if not args.path_graph:
         args.path_graph = paths['path_graph']
-    if not args.path_wnids and args.loss != 'CrossEntropyLoss':
+    if not args.path_wnids:
         args.path_wnids = paths['path_wnids']
 
 
@@ -230,7 +232,7 @@ class ResampleLabelsDataset(Dataset):
 
         self.drop_classes = drop_classes
         if self.drop_classes:
-            self.classes, self.labels = self.get_classes_after_drop(
+            self.classes, self.labels = self.apply_drop(
                 dataset, probability_labels)
 
         assert self.labels, 'No labels are included in `include_labels`'
@@ -295,7 +297,8 @@ class IncludeLabelsDataset(ResampleLabelsDataset):
     def __init__(self, dataset, include_labels=(0,)):
         super().__init__(dataset, probability_labels=[
             int(cls in include_labels) for cls in range(len(dataset.classes))
-        ])
+        ], drop_classes=True)
+        self.include_labels = include_labels
 
 
 class CIFAR10ResampleLabels(ResampleLabelsDataset):
@@ -376,6 +379,37 @@ class Imagenet1000IncludeLabels(IncludeLabelsDataset):
             dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
             include_labels=include_labels)
 
+class CIFAR10IncludeClasses(IncludeClassesDataset):
+
+    def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
+        super().__init__(
+            dataset=datasets.CIFAR10(*args, root=root, **kwargs),
+            include_classes=include_classes)
+
+
+class CIFAR100IncludeClasses(IncludeClassesDataset):
+
+    def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
+        super().__init__(
+            dataset=datasets.CIFAR100(*args, root=root, **kwargs),
+            include_classes=include_classes)
+
+
+class TinyImagenet200IncludeClasses(IncludeClassesDataset):
+
+    def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
+        super().__init__(
+            dataset=imagenet.TinyImagenet200(*args, root=root, **kwargs),
+            include_classes=include_classes)
+
+
+class Imagenet1000IncludeClasses(IncludeClassesDataset):
+
+    def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
+        super().__init__(
+            dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
+            include_classes=include_classes)
+
 
 class ExcludeLabelsDataset(IncludeLabelsDataset):
 
@@ -388,6 +422,7 @@ class ExcludeLabelsDataset(IncludeLabelsDataset):
         super().__init__(
             dataset=dataset,
             include_labels=include_labels)
+        self.include_labels = include_labels
 
 
 class CIFAR10ExcludeLabels(ExcludeLabelsDataset):

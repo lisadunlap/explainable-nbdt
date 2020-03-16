@@ -47,6 +47,8 @@ def get_parser():
         help='(induced graph) Linkage type used for agglomerative clustering')
     parser.add_argument('--induced-affinity', type=str, default='euclidean',
         help='(induced graph) Metric used for computing similarity')
+    parser.add_argument('--path', type=str, default='',
+                        help='Path to json file of graph')
     return parser
 
 

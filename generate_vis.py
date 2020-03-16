@@ -52,7 +52,7 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    path = get_graph_path_from_args(args)
+    path = args.path
     print('==> Reading from {}'.format(path))
 
     G = read_graph(path)
