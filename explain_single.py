@@ -5,6 +5,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 from nbdt import data, analysis, loss
+from PIL import Image
 
 import torchvision
 import torchvision.transforms as transforms
@@ -41,10 +42,13 @@ parser.add_argument('--eval', help='eval only', action='store_true')
 
 # options specific to this project and its dataloaders
 parser.add_argument('--loss', choices=loss.names, default='CrossEntropyLoss')
-parser.add_argument('--analysis', choices=analysis.names, help='Run analysis after each epoch')
+parser.add_argument('--analysis', choices=analysis.names, default='SingleInference',
+                    help='Run analysis after each epoch')
 parser.add_argument('--input-size', type=int,
                     help='Set transform train and val. Samples are resized to '
                     'input-size + 32.')
+parser.add_argument('--image-path', default='./data/samples/bcats.jpg',
+                    help='path to image')
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -55,8 +59,6 @@ args = parser.parse_args()
 data.custom.set_default_values(args)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-best_acc = 0  # best test accuracy
-start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # Data
 print('==> Preparing data..')
@@ -92,12 +94,13 @@ assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
-Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
+# load image
+img = transform_test(Image.open(args.image_path)).unsqueeze(0)
 
 # Model
 print('==> Building model..')
 model = getattr(models, args.model)
-model_kwargs = {'num_classes': len(trainset.classes) }
+model_kwargs = {'num_classes': 10 }
 
 if args.pretrained:
     try:
@@ -135,127 +138,14 @@ if args.resume:
             net.load_state_dict(checkpoint)
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
-
-loss_kwargs = {}
-class_criterion = getattr(loss, args.loss)
-populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
-    keys=loss.keys, globals=globals())
-criterion = class_criterion(**loss_kwargs)
-
-optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
-
-def adjust_learning_rate(epoch, lr):
-    if epoch <= 150 / 350. * args.epochs:  # 32k iterations
-      return lr
-    elif epoch <= 250 / 350. * args.epochs:  # 48k iterations
-      return lr/10
-    else:
-      return lr/100
-
-# Training
-def train(epoch, analyzer):
-    analyzer.start_train(epoch)
-    lr = adjust_learning_rate(epoch, args.lr)
-    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
-
-    print('\nEpoch: %d' % epoch)
-    net.train()
-    train_loss = 0
-    correct = 0
-    total = 0
-    for batch_idx, (inputs, targets) in enumerate(trainloader):
-        inputs, targets = inputs.to(device), targets.to(device)
-        optimizer.zero_grad()
-        outputs = net(inputs)
-        loss = criterion(outputs, targets)
-        loss.backward()
-        optimizer.step()
-
-        train_loss += loss.item()
-        _, predicted = outputs.max(1)
-        total += targets.size(0)
-        correct += predicted.eq(targets).sum().item()
-
-        stat = analyzer.update_batch(outputs, predicted, targets)
-        extra = f'| {stat}' if stat else ''
-
-        progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) %s'
-            % (train_loss/(batch_idx+1), 100.*correct/total, correct, total, extra))
-
-    analyzer.end_train(epoch)
-
-def test(epoch, analyzer, checkpoint=True):
-    analyzer.start_test(epoch)
-
-    global best_acc
-    net.eval()
-    test_loss = 0
-    correct = 0
-    total = 0
-    with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(testloader):
-            inputs, targets = inputs.to(device), targets.to(device)
-            outputs = net(inputs)
-            loss = criterion(outputs, targets)
-
-            test_loss += loss.item()
-            _, predicted = outputs.max(1)
-            total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
-
-            if device == 'cuda':
-                predicted = predicted.cpu()
-                targets = targets.cpu()
-
-            stat = analyzer.update_batch(outputs, predicted, targets)
-            extra = f'| {stat}' if stat else ''
-
-            progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) %s'
-                % (test_loss/(batch_idx+1), 100.*correct/total, correct, total, extra))
-
-    # Save checkpoint.
-    acc = 100.*correct/total
-    print("Accuracy: {}, {}/{}".format(acc, correct, total))
-    if acc > best_acc and checkpoint:
-        state = {
-            'net': net.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-        }
-        if not os.path.isdir('checkpoint'):
-            os.mkdir('checkpoint')
-
-        print(f'Saving to {checkpoint_fname} ({acc})..')
-        torch.save(state, f'./checkpoint/{checkpoint_fname}.pth')
-        best_acc = acc
-
-    analyzer.end_test(epoch)
-
-
 analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
 analyzer = class_analysis(**analyzer_kwargs)
 
+# run inference
+outputs = net(img.to(device))
+print(analyzer)
 
-if args.eval:
-    if not args.resume and not args.pretrained:
-        Colors.red(' * Warning: Model is not loaded from checkpoint. '
-        'Use --resume or --pretrained (if supported)')
-
-    analyzer.start_epoch(0)
-    test(0, analyzer, checkpoint=False)
-    exit()
-
-for epoch in range(start_epoch, args.epochs):
-    analyzer.start_epoch(epoch)
-    train(epoch, analyzer)
-    test(epoch, analyzer)
-    analyzer.end_epoch(epoch)
-
-if args.epochs == 0:
-    analyzer.start_epoch(0)
-    test(0, analyzer)
-    analyzer.end_epoch(0)
-print(f'Best accuracy: {best_acc} // Checkpoint name: {checkpoint_fname}')
+analyzer.inf(outputs)

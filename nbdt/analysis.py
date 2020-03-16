@@ -15,7 +15,8 @@ import csv
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'ConfusionMatrixJointNodes',
-    'IgnoredSamples', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules')
+    'IgnoredSamples', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
+    'SingleInference')
 keys = ('path_graph', 'path_wnids', 'weighted_average', 'trainset', 'testset')
 
 
@@ -255,6 +256,51 @@ class SoftEmbeddedDecisionRules(HardEmbeddedDecisionRules):
         self.correct += (predicted == targets).sum().item()
         accuracy = round(self.correct / float(self.total), 4) * 100
         return f'NBDT-Soft: {accuracy}%'
+
+    def end_test(self, epoch):
+        accuracy = round(self.correct / self.total * 100., 2)
+        print(f'NBDT-Soft Accuracy: {accuracy}%, {self.correct}/{self.total}')
+
+class SingleInference(HardEmbeddedDecisionRules):
+    """Inference on a single image ."""
+
+    def __init__(self, trainset, testset, path_graph, path_wnids,
+            weighted_average=False):
+        super().__init__(trainset, testset, path_graph, path_wnids)
+        self.num_classes = len(trainset.classes)
+
+    def single_traversal(self, _, wnid_to_pred_selector, n_samples):
+        wnid_root = get_root(self.G)
+        node_root = self.wnid_to_node[wnid_root]
+        wnid, node = wnid_root, node_root
+        path = [wnid]
+        while node is not None:
+            if node.wnid not in wnid_to_pred_selector:
+                wnid = node = None
+                break
+            pred_sub, selector = wnid_to_pred_selector[node.wnid]
+            index_new = sum(selector[:0 + 1]) - 1
+            index_child = pred_sub[index_new]
+            wnid = node.children[index_child]
+            path.append(wnid)
+            node = self.wnid_to_node.get(wnid, None)
+        return path
+
+    def inf(self, img):
+        wnid_to_pred_selector = {}
+        for node in self.nodes:
+            outputs_sub = HardTreeSupLoss.get_output_sub(
+                img, node, self.weighted_average)
+            selector = [1 for c in range(node.num_classes)]
+            if not any(selector):
+                continue
+            _, preds_sub = torch.max(outputs_sub, dim=1)
+            preds_sub = list(map(int, preds_sub.cpu()))
+            wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
+        n_samples = 1
+        predicted = self.single_traversal(
+            [], wnid_to_pred_selector, n_samples)
+        print("inference: ", predicted)
 
     def end_test(self, epoch):
         accuracy = round(self.correct / self.total * 100., 2)

@@ -47,7 +47,7 @@ def get_parser():
         help='(induced graph) Linkage type used for agglomerative clustering')
     parser.add_argument('--induced-affinity', type=str, default='euclidean',
         help='(induced graph) Metric used for computing similarity')
-    parser.add_argument('--path', type=str, default='',
+    parser.add_argument('--json-path', type=str, default='',
                         help='Path to json file of graph')
     return parser
 
@@ -339,16 +339,14 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
 
 def get_centers(checkpoint):
     data = torch.load(checkpoint, map_location=torch.device('cpu'))
-
-    for key in ('net', 'state_dict'):
-        try:
-            net = data[key]
-        except:
-            net = data
+    try:
+        net = data['net']
+    except:
+        net = data
 
     keys = ('fc.weight', 'linear.weight', 'module.linear.weight',
             'module.net.linear.weight', 'output.weight', 'module.output.weight',
-            'output.fc.weight', 'module.output.fc.weight', 'classifier.weight')
+            'output.fc.weight', 'module.output.fc.weight')
     fc = None
     for key in keys:
         if key in net:

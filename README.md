@@ -117,7 +117,7 @@ Run the visualization generation script to obtain both the JSON representing
 the hierarchy and the HTML file containing a d3 visualization.
 
 ```
-python generate_vis.py --single-path
+python generate_vis.py --json-path [PATH TO JSON FILE]
 ```
 
 The above script will output the following.
@@ -224,4 +224,12 @@ using `--path-checkpoint`
 
 ```
 python main.py --model=wrn28_10_cifar10 --path-checkpoint=...
+```
+
+## Inference on a Single Image
+
+To run inference on a single image, run `explain_single.py`, passing in the model, the dataset it was trained on, and its graph
+
+```
+python explain_single.py --dataset=CIFAR10 --model=wrn28_10 --path-graph=./data/CIFAR10/graph-induced-wrn28_10_cifar10.json --resume
 ```

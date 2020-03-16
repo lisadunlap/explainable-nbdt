@@ -14,6 +14,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 
 #techniques
 from Grad_CAM.main_gcam import gen_gcam, gen_gcam_target, gen_bp, gen_gbp, gen_bp_target, gen_gbp_target
+from utils import get_cam, get_model_info, get_imagenet_classes
 
 def gen_grounding_gcam_batch(imgs,
                   model='resnet18',
@@ -27,9 +28,27 @@ def gen_grounding_gcam_batch(imgs,
                   save=True,
                   save_path='./results/gradcam_examples/', 
                   show=True):
-    #CUDA_VISIBLE_DEVICES=str(device)
     # Create result directory if it doesn't exist; all explanations should 
     # be stored in a folder that is the predicted class
+    '''
+            Generate an explanation for an image using a certain technique.
+
+            :param img: tensor of images
+            :param technique: name of technique that you want to generate an
+            explanation for. Currently supports LIME('lime'), RISE('rise'), Grad-CAM('gcam'),
+            Backpropagation('bp'), GuidedBackprop('gbp'), Deconvolution('deconv')
+            :param model: model or name of model(if pretrained) to evaluaute on
+            :param show: display the image
+            :param layer: (for gradcam) name of last convolutional layer of model
+            (if using pretrained this will be filled in for you)
+            :param save_path: path to results
+            :param target_index: target class index if INDEX==True; otherwise the topk index
+            :param save: save the explanations (both as imgs and np arrays of just the heatmaps)
+            :param device: either cpu or gpu number
+            :param index: predict with respect to a specific class number
+            (default is predict topk class) TODO: get LIME and RISE working with specific indices
+            :return explanation for image as np array:
+    '''
 
     if not os.path.exists(save_path):
         os.makedirs(save_path)
