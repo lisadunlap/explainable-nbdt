@@ -1,4 +1,4 @@
-from nbdt.graph import get_root, get_wnids
+from nbdt.graph import get_root, get_wnids, synset_to_name, wnid_to_synset, get_leaves
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
     DEFAULT_CIFAR100_WNIDS, DEFAULT_TINYIMAGENET200_TREE,
@@ -7,22 +7,28 @@ from nbdt.utils import (
 )
 from nbdt.loss import HardTreeSupLoss, SoftTreeSupLoss
 from nbdt.data.custom import Node
+from networkx.readwrite.json_graph import node_link_data, node_link_graph
 import torch
 import torch.nn as nn
 import numpy as np
 import csv
+import networkx as nx
+import os
+import json
 
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'ConfusionMatrixJointNodes',
     'IgnoredSamples', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference')
-keys = ('path_graph', 'path_wnids', 'weighted_average', 'trainset', 'testset')
+    'SingleInference', 'HardFullTreePrior')
+keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average', 'trainset', 'testset', 'json_save_path')
 
 
 def add_arguments(parser):
-    pass
-
+    parser.add_argument('--json-save-path', default=None, type=str,
+                    help='Directory to save jsons under for full tree analysis')
+    parser.add_argument('--path-graph-analysis', default=None, type=str,
+                    help='path for graph for analysis')
 
 class Noop:
 
@@ -308,12 +314,17 @@ class SingleInference(HardEmbeddedDecisionRules):
 
 
 
-class FullTreePrior(Noop):
+class HardFullTreePrior(Noop):
+    accepts_path_graph_analysis = True
+    accepts_path_wnids = True
+    accepts_json_save_path = True
+    accepts_weighted_average = True
+
     """Evaluates model on a decision tree prior. Evaluation is deterministic."""
     """Evaluates on entire tree, tracks all paths."""
-    def __init__(self, trainset, testset, path_graph_analysis, path_wnids, csv_save_path, json_save_path,
+    def __init__(self, trainset, testset, path_graph_analysis, path_wnids, json_save_path, csv_save_path=None,
                  weighted_average=False):
-        super().__init__(trainset, testset, path_graph_analysis, path_wnids, weighted_average)
+        super().__init__(trainset, testset)
         # weird, sometimes self.classes are wnids, and sometimes they are direct classes.
         # just gotta do a check. Its basically CIFAR vs wordnet
         self.nodes = Node.get_nodes(path_graph_analysis, path_wnids, trainset.classes)
@@ -344,7 +355,7 @@ class FullTreePrior(Noop):
         n_samples = outputs.size(0)
 
         for node in self.nodes:
-            outputs_sub = HardTreeSupLoss.get_output_sub(outputs, node, targets, self.weighted_average)
+            outputs_sub = HardTreeSupLoss.get_output_sub(outputs, node, self.weighted_average)
             _, preds_sub = torch.max(outputs_sub, dim=1)
             preds_sub = list(map(int, preds_sub.cpu()))
             wnid_to_pred_selector[node.wnid] = preds_sub
@@ -381,7 +392,8 @@ class FullTreePrior(Noop):
         return leaf_wnids
 
     def end_test(self, epoch):
-        self.write_to_csv(self.csv_save_path)
+        if self.csv_save_path is not None:
+            self.write_to_csv(self.csv_save_path)
         self.write_to_json(self.json_save_path)
 
     def write_to_csv(self, path):

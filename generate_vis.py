@@ -2,6 +2,7 @@ import json
 import argparse
 import torchvision
 import os
+import numpy as np
 
 from pathlib import Path
 from nbdt.utils import Colors, METHODS, DATASET_TO_FOLDER_NAME
@@ -12,13 +13,15 @@ from nbdt import data
 
 
 def build_tree(G, root, parent='null'):
+    weight = 2 * G.nodes[root].get('weight', float('inf')) - 1
     return {
         'name': root,
         'label': G.nodes[root].get('label', ''),
+        'weight': G.nodes[root].get('weight', ''),
         'parent': parent,
-        'children': [build_tree(G, child, root) for child in G.succ[root]]
+        'children': [build_tree(G, child, root) for child in G.succ[root]],
+        'fill': 24 * (np.tanh(weight) + 1)
     }
-
 
 def build_graph(G):
     return {
@@ -50,9 +53,20 @@ def generate_vis(path_template, data, name, fname):
 
 def main():
     parser = get_parser()
+    parser.add_argument('--mode', default='normal', choices=['normal', 'weighted'], help='Type of visualization.')
     args = parser.parse_args()
 
     path = args.json_path
+
+    if not os.path.isfile(path):  # is directory
+        for f in os.listdir(path):
+            if f.split('.')[-1] != 'json':
+                continue
+            setup_vis(args, os.path.join(path, f))
+    else:
+        setup_vis(args, path)
+
+def setup_vis(args, path):
     print('==> Reading from {}'.format(path))
 
     G = read_graph(path)
@@ -70,8 +84,11 @@ def main():
 
     #fname = generate_fname(**vars(args)).replace('graph-', '', 1)
     fname = path.split('/')[-1].replace('.pth', '')
-    generate_vis('vis/tree-template.html', tree, 'tree', fname)
-    generate_vis('vis/graph-template.html', graph, 'graph', fname)
+    if args.mode == 'weighted':
+        generate_vis('vis/tree-weighted-template.html', tree, 'tree', fname)
+    else:
+        generate_vis('vis/tree-template.html', tree, 'tree', fname)
+        generate_vis('vis/graph-template.html', graph, 'graph', fname)
 
 
 if __name__ == '__main__':
