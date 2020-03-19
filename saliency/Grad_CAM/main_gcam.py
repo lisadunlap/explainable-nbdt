@@ -5,7 +5,7 @@ from __future__ import print_function
 import copy
 import os.path as osp
 
-import click
+#import click
 import cv2
 import matplotlib.cm as cm
 import sys
@@ -15,9 +15,9 @@ import torch.hub
 import torch.nn.functional as F
 from torch.autograd import Variable
 from torchvision import models, transforms
-from data_utils.data_setup import get_imagenet_classes
+from ..utils import get_imagenet_classes
 
-from Grad_CAM.gcam import (
+from .gcam import (
     BackPropagation,
     Deconvnet,
     GradCAM,

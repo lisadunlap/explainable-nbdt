@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from data_utils.data_setup import get_model_info
+#from data_utils.data_setup import get_model_info
 
 # Function that opens image from disk, normalizes it and converts to tensor
 read_tensor = transforms.Compose([
@@ -40,13 +40,13 @@ def get_model(model_name):
 def get_imagenet_classes():
     classes = list()
     try:
-        with open('/work/lisabdunlap/explain-eval/data/synset_words.txt') as lines:
+        with open('data/imagenet-1000/synset_words.txt') as lines:
             for line in lines:
                 line = line.strip().split(' ', 1)[1]
                 line = line.split(', ', 1)[0].replace(' ', '_')
                 classes.append(line)
     except:
-        with open('/work/lisabdunlap/explain-eval/data/synset_words.txt') as lines:
+        with open('data/imagenet-1000/synset_words.txt') as lines:
             for line in lines:
                 line = line.strip().split(' ', 1)[1]
                 line = line.split(', ', 1)[0].replace(' ', '_')

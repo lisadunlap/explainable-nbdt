@@ -5,6 +5,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 from nbdt import data, analysis, loss
+from saliency.generate_batch import * 
 
 import torchvision
 import torchvision.transforms as transforms
@@ -46,6 +47,8 @@ parser.add_argument('--input-size', type=int,
                     help='Set transform train and val. Samples are resized to '
                     'input-size + 32.')
 
+parser.add_argument('--gradcam', help='generate gradcams only', action='store_true')
+
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
 analysis.add_arguments(parser)
@@ -84,6 +87,10 @@ dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
     keys=data.custom.keys, globals=globals())
 
+if args.gradcam:
+    print("===> Preparing gradcam")
+    dataset_kwargs['model'] = None
+
 trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
 testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
 
@@ -113,6 +120,15 @@ net = net.to(device)
 if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
+
+if args.gradcam:
+    dataset_kwargs['model'] = net
+    trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
+    testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
+    assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
+    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
+
 
 checkpoint_fname = generate_fname(**vars(args))
 resume_path = args.path_resume or './checkpoint/{}.pth'.format(checkpoint_fname)
@@ -247,6 +263,16 @@ if args.eval:
     analyzer.start_epoch(0)
     test(0, analyzer, checkpoint=False)
     exit()
+
+if args.gradcam:
+    print("===> gradcam")
+    net.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(testloader):
+            print(batch_idx, inputs, targets)
+            1/0
+    exit()
+
 
 for epoch in range(start_epoch, args.epochs):
     analyzer.start_epoch(epoch)

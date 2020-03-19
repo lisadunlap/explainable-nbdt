@@ -13,8 +13,9 @@ import torch.nn as nn
 from mpl_toolkits.axes_grid1 import ImageGrid
 
 #techniques
-from Grad_CAM.main_gcam import gen_gcam, gen_gcam_target, gen_bp, gen_gbp, gen_bp_target, gen_gbp_target
-from utils import get_cam, get_model_info, get_imagenet_classes
+from .Grad_CAM.main_gcam import gen_gcam, gen_gcam_target, gen_bp, gen_gbp, gen_bp_target, gen_gbp_target
+#from .utils import get_cam, get_model_info, get_imagenet_classes
+from .utils import get_cam, get_imagenet_classes
 
 def gen_grounding_gcam_batch(imgs,
                   model='resnet18',
