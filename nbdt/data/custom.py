@@ -469,12 +469,13 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
 
     def __getitem__(self, i):
         curr_img, target = super().__getitem__(i)
-        transf_img = imagenet.TinyImagenet200.transform_val()(curr_img)
+        transf = imagenet.TinyImagenet200.transform_val()
         cam_mask = gen_gcam_target(
-            imgs=[transf_img],
+            imgs=[curr_img],
             model=self.model,
             target_layer=self.target_layer,
             target_index=[target],
+            transf=transf
             )
         print(curr_img, cam_mask)
         masked_img = curr_img[cam_mask > self.cam_threshold]

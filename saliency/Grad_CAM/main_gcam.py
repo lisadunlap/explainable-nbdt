@@ -7,6 +7,7 @@ import os.path as osp
 
 #import click
 import cv2
+import PIL
 import matplotlib.cm as cm
 import sys
 import numpy as np
@@ -37,16 +38,20 @@ def get_device(cuda, device):
     return device
 
 
-def preprocess(raw_image):
+def preprocess(raw_image, transf=None):
     is_tensor = type(raw_image) == torch.Tensor
     if is_tensor:
         orig = raw_image.clone()
+        if transf:
+            raw_image = transf(raw_image)
         raw_image = raw_image.unsqueeze(0)
         raw_image = torch.nn.functional.interpolate(raw_image, size=(224,224))
         raw_image = raw_image.squeeze(0).permute(1,2,0)
+    elif type(raw_image) == PIL.Image.Image:
+        raw_image = transforms.Resize(size=(224, 224))(raw_image)
+
     else:
         raw_image = cv2.resize(raw_image, (224,) * 2)
-    print(raw_image.shape)
     image = transforms.Compose(
         [
             transforms.ToTensor(),
@@ -71,7 +76,7 @@ def save_gradcam(gcam):
     gcam = gcam.cpu().numpy()
     return gcam
 
-def gen_model_forward(imgs, model, device='cuda', prep=True, type='gcam'):
+def gen_model_forward(imgs, model, device='cuda', prep=True, type='gcam', transf=None):
     """
     Visualize model responses given multiple images
     """
@@ -85,7 +90,7 @@ def gen_model_forward(imgs, model, device='cuda', prep=True, type='gcam'):
     raw_images = []
     for i, im in enumerate(imgs):
         if prep:
-            image, raw_image = preprocess(im)
+            image, raw_image = preprocess(im, transf)
         else:
             image = im
             raw_image = im.cpu().numpy().transpose((1,2,0))
@@ -135,13 +140,13 @@ def gen_gcam(imgs, model, target_layer='layer4', target_index=1, classes=get_ima
     gcam.remove_hook()
     return masks
 
-def gen_gcam_target(imgs, model, target_layer='layer4', target_index=None, classes=get_imagenet_classes(), device='cuda', prep=True):
+def gen_gcam_target(imgs, model, target_layer='layer4', target_index=None, classes=get_imagenet_classes(), device='cuda', prep=True, transf=None):
     """
     Visualize model responses given multiple images
     """
    
     # Get model and forward pass   
-    gcam, probs, ids, images = gen_model_forward(imgs, model, device=device, prep=prep, type='gcam')
+    gcam, probs, ids, images = gen_model_forward(imgs, model, device=device, prep=prep, type='gcam', transf=transf)
     
     ids_ = torch.LongTensor([[x] for x in target_index]).to(device)
     gcam.backward(ids=ids_)
