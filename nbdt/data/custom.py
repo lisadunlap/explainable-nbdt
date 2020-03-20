@@ -13,6 +13,7 @@ from collections import defaultdict
 from nbdt.graph import get_wnids, read_graph, get_leaves, get_non_leaves, \
     get_leaf_weights
 from . import imagenet
+from saliency.Grad_CAM.main_gcam import gen_gcam_target
 import torch.nn as nn
 import random
 
@@ -459,8 +460,8 @@ class Imagenet1000ExcludeLabels(ExcludeLabelsDataset):
 
 class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
     def __init__(self, root='./data',
-            *args, model, target_layer='layer4', cam_threshold=-1, **kwargs):
-        super().__init__()
+            *args, model, include_classes=('cat',), target_layer='layer4', cam_threshold=-1, **kwargs):
+        super().__init__(root=root, include_classes=include_classes)
         self.model = model
         self.target_layer = target_layer
         self.cam_threshold = cam_threshold
@@ -468,7 +469,7 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
 
     def __getitem__(self, i):
         curr_img, target = super().__getitem__(i)
-        transf_img = TinyImagenet200.transform_val(curr_img)
+        transf_img = imagenet.TinyImagenet200.transform_val()(curr_img)
         cam_mask = gen_gcam_target(
             imgs=[transf_img],
             model=self.model,

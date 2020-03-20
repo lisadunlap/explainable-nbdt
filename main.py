@@ -90,6 +90,7 @@ populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
 if args.gradcam:
     print("===> Preparing gradcam")
     dataset_kwargs['model'] = None
+    print(args.dataset, dataset_kwargs)
 
 trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
 testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
@@ -122,6 +123,7 @@ if device == 'cuda':
     cudnn.benchmark = True
 
 if args.gradcam:
+    print("Rebuilding GradCAM dataset")
     dataset_kwargs['model'] = net
     trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
     testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)

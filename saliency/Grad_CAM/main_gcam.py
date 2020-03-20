@@ -38,13 +38,24 @@ def get_device(cuda, device):
 
 
 def preprocess(raw_image):
-    raw_image = cv2.resize(raw_image, (224,) * 2)
+    is_tensor = type(raw_image) == torch.Tensor
+    if is_tensor:
+        orig = raw_image.clone()
+        raw_image = raw_image.unsqueeze(0)
+        raw_image = torch.nn.functional.interpolate(raw_image, size=(224,224))
+        raw_image = raw_image.squeeze(0).permute(1,2,0)
+    else:
+        raw_image = cv2.resize(raw_image, (224,) * 2)
+    print(raw_image.shape)
     image = transforms.Compose(
         [
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
-    )(raw_image.copy())
+    )(raw_image.numpy() if is_tensor else raw_image.copy())
+    if is_tensor:
+        image = torch.Tensor(image)
+        raw_image = orig
     return image, raw_image
 
 
@@ -66,7 +77,7 @@ def gen_model_forward(imgs, model, device='cuda', prep=True, type='gcam'):
     """
 
     # Model from torchvision
-    model.to(device)
+    #model.to(device)
     model.eval()
 
     # Images
@@ -80,7 +91,8 @@ def gen_model_forward(imgs, model, device='cuda', prep=True, type='gcam'):
             raw_image = im.cpu().numpy().transpose((1,2,0))
         images.append(image)
         raw_images.append(raw_image)
-    images = torch.stack(images).to(device)
+    
+    images = torch.stack(images) #.to(device)
 
     if type == 'gcam':
         tech_model = GradCAM(model=model)
