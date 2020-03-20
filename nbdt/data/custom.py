@@ -25,8 +25,11 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'CIFAR100ExcludeLabels', 'TinyImagenet200ExcludeLabels',
                    'Imagenet1000ExcludeLabels', 'CIFAR10ResampleLabels',
                    'CIFAR100ResampleLabels', 'TinyImagenet200ResampleLabels',
-                   'Imagenet1000ResampleLabels')
-keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels')
+                   'Imagenet1000ResampleLabels', 'CIFAR10CombineClasses',
+                   'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
+                   'Imagenet1000CombineClasses', )
+
+keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes')
 
 
 def add_arguments(parser):
@@ -34,10 +37,11 @@ def add_arguments(parser):
     parser.add_argument('--include-labels', nargs='*', type=int)
     parser.add_argument('--exclude-labels', nargs='*', type=int)
     parser.add_argument('--include-classes', nargs='*', type=str)
+    parser.add_argument('--combine-classes', nargs='+', type=str, action='append')
 
 
 def set_default_values(args):
-    paths = DATASET_TO_PATHS[args.dataset.replace('IncludeLabels', '').replace('IncludeClasses', '').replace('ExcludeLabels', '').replace('ResampleLabels', '')]
+    paths = DATASET_TO_PATHS[args.dataset.replace('IncludeLabels', '').replace('IncludeClasses', '').replace('ExcludeLabels', '').replace('ResampleLabels', '').replace('CombineLabels', '').replace('CombineClasses', '')]
     if not args.path_graph:
         args.path_graph = paths['path_graph']
     if not args.path_wnids:
@@ -299,6 +303,90 @@ class IncludeLabelsDataset(ResampleLabelsDataset):
             int(cls in include_labels) for cls in range(len(dataset.classes))
         ], drop_classes=True)
         self.include_labels = include_labels
+
+
+class CombineLabelsDataset(IncludeLabelsDataset):
+    # Combines one or more classes into one label
+
+    accepts_combine_labels = True
+
+    def __init__(self, dataset, include_labels=(0,), combine_labels=[]):
+        super().__init__(dataset, include_labels)
+        new_labels = {}
+
+        # update classes
+        remove_classes = set()
+        for lst in combine_labels:
+            for cls in lst[1:]:
+                remove_classes.add(cls)
+            remove_classes.remove(lst[0])
+        self.classes = [cls for cls in self.classes if dataset.classes.index(cls) not in remove_classes ]
+
+        combine_labels = [[self.include_labels.index(label_old) for label_old in grp] for grp in combine_labels]
+
+        for lst in combine_labels:
+            assert len(lst) > 1, "Needs at least one original class in group"
+            for cls in lst[1:]:
+                new_labels[cls] = lst[0]
+
+        self.new_labels = new_labels
+
+    def __getitem__(self, index_new):
+        sample, label_new = super().__getitem__(index_new)
+        if label_new in self.new_labels:
+            label_new = self.new_labels[label_new]
+
+        print(label_new)
+        return sample, label_new
+
+class CombineClassesDataset(CombineLabelsDataset):
+    """
+    Dataset that combines one or more groups of classes into a single class
+    """
+    accepts_include_classes = True
+    accepts_combine_classes = True
+
+    def __init__(self, dataset, include_classes=(0,), combine_classes=[]):
+        super().__init__(dataset, include_labels=[
+                dataset.classes.index(cls) for cls in include_classes
+                ], combine_labels=[[dataset.classes.index(cls) for cls in grp]
+                for grp in combine_classes])
+
+
+class CIFAR10CombineClasses(CombineClassesDataset):
+
+    def __init__(self, *args, root='./data', include_classes=('cat',),
+                 combine_classes=[], **kwargs):
+        super().__init__(
+            dataset=datasets.CIFAR10(*args, root=root, **kwargs),
+            include_classes=include_classes, combine_classes=combine_classes)
+
+
+class CIFAR100CombineClasses(CombineClassesDataset):
+
+    def __init__(self, *args, root='./data', include_classes=('cat',),
+                 combine_classes=[], **kwargs):
+        super().__init__(
+            dataset=datasets.CIFAR100(*args, root=root, **kwargs),
+            include_classes=include_classes, combine_classes=combine_classes)
+
+
+class TinyImagenet200CombineClasses(CombineClassesDataset):
+
+    def __init__(self, *args, root='./data', include_classes=('cat',),
+                 combine_classes=[], **kwargs):
+        super().__init__(
+            dataset=imagenet.TinyImagenet200(*args, root=root, **kwargs),
+            include_classes=include_classes, combine_classes=combine_classes)
+
+
+class Imagenet1000CombineClasses(CombineClassesDataset):
+
+    def __init__(self, *args, root='./data', include_classes=('cat',),
+                 combine_classes=[], **kwargs):
+        super().__init__(
+            dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
+            include_classes=include_classes, combine_classes=combine_classes)
 
 
 class CIFAR10ResampleLabels(ResampleLabelsDataset):
