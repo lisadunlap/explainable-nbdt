@@ -2,6 +2,7 @@ import torchvision.datasets as datasets
 import torch
 import numpy as np
 from torch.utils.data import Dataset
+import torchvision.transforms as transforms
 from collections import defaultdict
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
@@ -276,6 +277,9 @@ class ResampleLabelsDataset(Dataset):
                 new_to_old.append(old)
         return new_to_old
 
+    def get_dataset(self):
+        return self.dataset
+
     def __getitem__(self, index_new):
         index_old = self.new_to_old[index_new]
         sample, label_old = self.dataset[index_old]
@@ -402,6 +406,22 @@ class TinyImagenet200IncludeClasses(IncludeClassesDataset):
         super().__init__(
             dataset=imagenet.TinyImagenet200(*args, root=root, **kwargs),
             include_classes=include_classes)
+
+    @staticmethod
+    def transform_train(input_size=64):
+        return transforms.Compose([
+            transforms.RandomCrop(input_size, padding=8),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262]),
+        ])
+
+    @staticmethod
+    def transform_val(input_size=-1):
+        return transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262]),
+        ])
 
 
 class Imagenet1000IncludeClasses(IncludeClassesDataset):
