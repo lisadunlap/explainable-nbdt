@@ -311,32 +311,46 @@ class CombineLabelsDataset(IncludeLabelsDataset):
     accepts_combine_labels = True
 
     def __init__(self, dataset, include_labels=(0,), combine_labels=[]):
+        self.old_label_groups = [grp[1:] for grp in combine_labels]
+        self.group_heads = [grp[0] for grp in combine_labels]
         super().__init__(dataset, include_labels)
+        
+        new_label_groups = [[self.include_labels.index(label) for label in grp] for grp in self.old_label_groups]
+        heads = {}
+        for head, grp in zip(self.group_heads, new_label_groups):
+            for label in grp:
+                heads[label] = head
         new_labels = {}
 
-        # update classes
-        remove_classes = set()
-        for lst in combine_labels:
-            for cls in lst[1:]:
-                remove_classes.add(cls)
-            remove_classes.remove(lst[0])
-        self.classes = [cls for cls in self.classes if dataset.classes.index(cls) not in remove_classes ]
-
-        combine_labels = [[self.include_labels.index(label_old) for label_old in grp] for grp in combine_labels]
-
-        for lst in combine_labels:
-            assert len(lst) > 1, "Needs at least one original class in group"
-            for cls in lst[1:]:
-                new_labels[cls] = lst[0]
+        n_labels = 0
+        for new_label, old_label in enumerate(self.include_labels):
+            if new_label in heads:
+                new_labels[new_label] = self.classes.index(heads[new_label])
+            else:
+                new_labels[new_label] = n_labels
+                n_labels += 1
 
         self.new_labels = new_labels
 
+    def apply_drop(self, dataset, ps):
+        # added functionality for dropping classes that are grouped
+        old_label_groups_set = set()
+        for grp in self.old_label_groups:
+            for label in grp:
+                old_label_groups_set.add(label)
+
+        classes = [
+            cls for p, cls in zip(ps, dataset.classes)
+            if p > 0 and dataset.classes.index(cls) not in old_label_groups_set
+        ] + self.group_heads
+
+        labels = [i for p, i in zip(ps, range(len(dataset.classes))) if p > 0 and i not in old_label_groups_set]
+        labels += [i for i in range(len(labels), len(labels) + len(self.group_heads))]
+        return classes, labels
+
     def __getitem__(self, index_new):
         sample, label_new = super().__getitem__(index_new)
-        if label_new in self.new_labels:
-            label_new = self.new_labels[label_new]
-
-        print(label_new)
+        label_new = self.new_labels[label_new]
         return sample, label_new
 
 class CombineClassesDataset(CombineLabelsDataset):
@@ -349,7 +363,7 @@ class CombineClassesDataset(CombineLabelsDataset):
     def __init__(self, dataset, include_classes=(0,), combine_classes=[]):
         super().__init__(dataset, include_labels=[
                 dataset.classes.index(cls) for cls in include_classes
-                ], combine_labels=[[dataset.classes.index(cls) for cls in grp]
+                ], combine_labels=[[grp[0]] + [dataset.classes.index(cls) for cls in grp[1:]]
                 for grp in combine_classes])
 
 
