@@ -187,6 +187,9 @@ class HardEmbeddedDecisionRules(Noop):
         self.weighted_average = weighted_average
         self.correct = 0
         self.total = 0
+        self.class_totals = np.zeros(len(trainset.classes))
+        self.class_correct = np.zeros(len(trainset.classes))
+        self.accuracies = np.zeros(len(trainset.classes))
 
     def update_batch(self, outputs, predicted, targets):
         super().update_batch(outputs, predicted, targets)
@@ -207,6 +210,11 @@ class HardEmbeddedDecisionRules(Noop):
             predicted, wnid_to_pred_selector, n_samples).to(targets.device)
         self.total += n_samples
         self.correct += (predicted == targets).sum().item()
+        for i in range(n_samples):
+            self.class_totals[targets[i]] += 1
+            if targets[i] == predicted[i]:
+                self.class_correct[targets[i]] += 1
+        self.accuracies = [self.class_correct[j]/self.class_totals[j] for j in range(len(self.class_correct))]
         accuracy = round(self.correct / float(self.total), 4) * 100
         return f'NBDT-Hard: {accuracy}%'
 
@@ -236,6 +244,8 @@ class HardEmbeddedDecisionRules(Noop):
     def end_test(self, epoch):
         super().end_test(epoch)
         accuracy = round(self.correct / self.total * 100., 2)
+        for i in range(len(self.accuracies)):
+            print("Class {0} accuracy: {1}".format(self.classes[i], self.accuracies[i]))
         print(f'NBDT-Hard Accuracy: {accuracy}%, {self.correct}/{self.total}')
 
 
@@ -284,7 +294,9 @@ class SingleInference(HardEmbeddedDecisionRules):
             wnid = node.children[index_child]
             path.append(wnid)
             node = self.wnid_to_node.get(wnid, None)
-        return path
+        cls = self.wnid_to_class.get(wnid, None)
+        pred = -1 if cls is None else self.classes.index(cls)
+        return path, pred
 
     def inf(self, img):
         wnid_to_pred_selector = {}
@@ -298,8 +310,9 @@ class SingleInference(HardEmbeddedDecisionRules):
             preds_sub = list(map(int, preds_sub.cpu()))
             wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
         n_samples = 1
-        predicted = self.single_traversal(
+        predicted, label = self.single_traversal(
             [], wnid_to_pred_selector, n_samples)
+        print("label: ", label)
         print("inference: ", predicted)
 
     def end_test(self, epoch):

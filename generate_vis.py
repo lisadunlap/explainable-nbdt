@@ -52,7 +52,9 @@ def main():
     parser = get_parser()
     args = parser.parse_args()
 
-    path = args.json_path
+    path = get_graph_path_from_args(args)
+    if args.json_path:
+        path = args.json_path
     print('==> Reading from {}'.format(path))
 
     G = read_graph(path)
@@ -69,7 +71,7 @@ def main():
         print(f'Found just {num_roots} root.')
 
     #fname = generate_fname(**vars(args)).replace('graph-', '', 1)
-    fname = path.split('/')[-1].replace('.pth', '')
+    fname = path.split('/')[-1].replace('.pth', '').replace('.json', '')
     generate_vis('vis/tree-template.html', tree, 'tree', fname)
     generate_vis('vis/graph-template.html', graph, 'graph', fname)
 
