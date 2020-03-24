@@ -80,6 +80,7 @@ populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
     keys=data.custom.keys, globals=globals())
 
 testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
+trainset=testset
 
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
@@ -136,6 +137,5 @@ analyzer = class_analysis(**analyzer_kwargs)
 # run inference
 net.eval()
 outputs = net(img.to(device))
-print(analyzer)
 
 analyzer.inf(outputs)

@@ -26,7 +26,7 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'CIFAR100ExcludeLabels', 'TinyImagenet200ExcludeLabels',
                    'Imagenet1000ExcludeLabels', 'CIFAR10ResampleLabels',
                    'CIFAR100ResampleLabels', 'TinyImagenet200ResampleLabels',
-                   'Imagenet1000ResampleLabels')
+                   'Imagenet1000ResampleLabels','TinyImagenet200GradCAM')
 keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels')
 
 
@@ -475,3 +475,26 @@ class Imagenet1000ExcludeLabels(ExcludeLabelsDataset):
         super().__init__(
             dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
             exclude_labels=exclude_labels)
+
+class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
+    def __init__(self, root='./data',
+                 *args, model, include_classes=('cat',), target_layer='layer4', cam_threshold=-1, **kwargs):
+        super().__init__(root=root, include_classes=include_classes)
+        self.model = model
+        self.target_layer = target_layer
+        self.cam_threshold = cam_threshold
+
+    def __getitem__(self, i):
+        curr_img, target = super().__getitem__(i)
+        transf = imagenet.TinyImagenet200.transform_val()
+        cam_mask = gen_gcam_target(
+            imgs=[curr_img],
+            model=self.model,
+            target_layer=self.target_layer,
+            target_index=[target],
+            transf=transf
+        )
+        print(curr_img, cam_mask)
+        masked_img = curr_img[cam_mask > self.cam_threshold]
+
+        return curr_img, masked_img
