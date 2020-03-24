@@ -1,13 +1,11 @@
 '''Train CIFAR10 with PyTorch.'''
 import torch
-import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 from nbdt import data, analysis, loss
-from saliency.Grad_CAM.main_gcam import gen_gcam_target 
+from saliency.Grad_CAM.main_gcam import gen_gcam_target
+import cv2
 
-import torchvision
 import torchvision.transforms as transforms
 
 import os
@@ -15,7 +13,7 @@ import argparse
 
 import models
 from nbdt.utils import (
-    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors
+    progress_bar, generate_fname, populate_kwargs, Colors
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
@@ -87,10 +85,10 @@ dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
     keys=data.custom.keys, globals=globals())
 
-#if args.gradcam:
-#    print("===> Preparing gradcam")
-#    dataset_kwargs['model'] = None
-#    print(args.dataset, dataset_kwargs)
+if args.gradcam:
+   print("===> Preparing gradcam")
+   dataset_kwargs['model'] = None
+   print(args.dataset, dataset_kwargs)
 
 trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
 testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
@@ -122,14 +120,20 @@ if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
-#if args.gradcam:
-#    print("Rebuilding GradCAM dataset")
-#    dataset_kwargs['model'] = net
-#    trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
-#    testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
-#    assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
-#    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
-#    testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
+if args.gradcam:
+   print("Rebuilding GradCAM dataset")
+   dataset_kwargs['model'] = net
+   trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
+   testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
+   assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
+   os.mkdir('./gcam_testing/')
+   for i in range(5):
+       testset[i][0].save('./gcam_testing/original-{}.jpg'.format(i))
+       # cv2.imwrite('gcam-{}.jpg'.format(i), testset[i][1])
+       testset[i][1].save('./gcam_testing/gcam-{}.jpg'.format(i))
+   print('=====> save to ./gcam_testing')
+   trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+   testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
 
 checkpoint_fname = generate_fname(**vars(args))
