@@ -3,20 +3,16 @@ import torch
 import numpy as np
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
-from collections import defaultdict
 from nbdt.utils import (
-    DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
-    DEFAULT_CIFAR100_WNIDS, DEFAULT_TINYIMAGENET200_TREE,
-    DEFAULT_TINYIMAGENET200_WNIDS, DEFAULT_IMAGENET1000_TREE,
-    DEFAULT_IMAGENET1000_WNIDS, DATASET_TO_PATHS
+    DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DATASET_TO_PATHS
 )
 from collections import defaultdict
 from nbdt.graph import get_wnids, read_graph, get_leaves, get_non_leaves, \
     get_leaf_weights
 from . import imagenet
 from saliency.Grad_CAM.main_gcam import gen_gcam_target
-import torch.nn as nn
 import random
+from matplotlib import pyplot as plt
 
 
 __all__ = names = ('CIFAR10IncludeLabels',
@@ -480,7 +476,7 @@ class Imagenet1000ExcludeLabels(ExcludeLabelsDataset):
 
 class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
     def __init__(self, root='./data',
-            *args, model, include_classes=('cat',), target_layer='layer4', cam_threshold=-1, **kwargs):
+            *args, model, include_classes=('cat',), target_layer='module.layer4', cam_threshold=.5, **kwargs):
         super().__init__(root=root, include_classes=include_classes)
         self.model = model
         self.target_layer = target_layer
@@ -497,7 +493,8 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
             target_index=[target],
             transf=transf
             )
-        print(curr_img, cam_mask)
-        masked_img = curr_img[cam_mask > self.cam_threshold]
-
+        masked_img  = np.asarray(curr_img)
+        masked_img.setflags(write=1)
+        masked_img[cam_mask > np.percentile(cam_mask, self.cam_threshold)] = 0
+        plt.imshow(masked_img)
         return curr_img, masked_img

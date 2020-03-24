@@ -2,23 +2,16 @@ from __future__ import print_function
 
 # code originally from https://github.com/kazuto1011/grad-cam-pytorch
 
-import copy
-import os.path as osp
-
 #import click
 import cv2
 import PIL
-import matplotlib.cm as cm
 import sys
 import numpy as np
 import torch
 import torch.hub
-import torch.nn.functional as F
-from torch.autograd import Variable
-from torchvision import models, transforms
-from ..utils import get_imagenet_classes
+from torchvision import transforms
 
-from .gcam import (
+from saliency.Grad_CAM.gcam import (
     BackPropagation,
     Deconvnet,
     GradCAM,
@@ -48,7 +41,10 @@ def preprocess(raw_image, transf=None):
         raw_image = torch.nn.functional.interpolate(raw_image, size=(224,224))
         raw_image = raw_image.squeeze(0).permute(1,2,0)
     elif type(raw_image) == PIL.Image.Image:
-        raw_image = transforms.Resize(size=(224, 224))(raw_image)
+        if transf:
+            print('get here')
+            image = transf(raw_image)
+        #raw_image = transforms.Resize(size=(224, 224))(raw_image)
 
     else:
         raw_image = cv2.resize(raw_image, (224,) * 2)
@@ -58,9 +54,6 @@ def preprocess(raw_image, transf=None):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )(raw_image.numpy() if is_tensor else raw_image.copy())
-    if is_tensor:
-        image = torch.Tensor(image)
-        raw_image = orig
     return image, raw_image
 
 
@@ -114,7 +107,7 @@ def gen_model_forward(imgs, model, device='cuda', prep=True, type='gcam', transf
     probs, ids = tech_model.forward(images)
     return tech_model, probs, ids, images
     
-def gen_gcam(imgs, model, target_layer='layer4', target_index=1, classes=get_imagenet_classes(), device='cuda', prep=True):
+def gen_gcam(imgs, model, target_layer='layer4', target_index=1, classes=(), device='cuda', prep=True):
     """
     Visualize model responses given multiple images
     """
@@ -140,7 +133,7 @@ def gen_gcam(imgs, model, target_layer='layer4', target_index=1, classes=get_ima
     gcam.remove_hook()
     return masks
 
-def gen_gcam_target(imgs, model, target_layer='layer4', target_index=None, classes=get_imagenet_classes(), device='cuda', prep=True, transf=None):
+def gen_gcam_target(imgs, model, target_layer='layer4', target_index=None, classes=(), device='cuda', prep=True, transf=None):
     """
     Visualize model responses given multiple images
     """
@@ -163,7 +156,7 @@ def gen_gcam_target(imgs, model, target_layer='layer4', target_index=None, class
     return masks
 
 
-def gen_bp(imgs, model, target_index=1, classes=get_imagenet_classes(), device='cuda', prep=True):
+def gen_bp(imgs, model, target_index=1, classes=(), device='cuda', prep=True):
     """
     Visualize model responses given multiple images
     """
@@ -187,7 +180,7 @@ def gen_bp(imgs, model, target_index=1, classes=get_imagenet_classes(), device='
     bp.remove_hook()
     return masks
 
-def gen_bp_target(imgs, model, target_index=None, classes=get_imagenet_classes(), device='cuda', prep=True):
+def gen_bp_target(imgs, model, target_index=None, classes=(), device='cuda', prep=True):
     """
     Visualize model responses given multiple images
     """
@@ -209,7 +202,7 @@ def gen_bp_target(imgs, model, target_index=None, classes=get_imagenet_classes()
         return masks[0]
     return masks
 
-def gen_gbp(imgs, model, target_index=1, classes=get_imagenet_classes(), device='cuda', prep=True):
+def gen_gbp(imgs, model, target_index=1, classes=(), device='cuda', prep=True):
     """
     Visualize model responses given multiple images
     """
@@ -234,7 +227,7 @@ def gen_gbp(imgs, model, target_index=1, classes=get_imagenet_classes(), device=
     gbp.remove_hook()
     return masks
 
-def gen_gbp_target(imgs, model, target_index=None, classes=get_imagenet_classes(), device='cuda', prep=True):
+def gen_gbp_target(imgs, model, target_index=None, classes=(), device='cuda', prep=True):
     """
     Visualize model responses given multiple images
     """
@@ -257,7 +250,7 @@ def gen_gbp_target(imgs, model, target_index=None, classes=get_imagenet_classes(
     return masks
 
 
-def gen_deconv(imgs, model, target_index=1, classes=get_imagenet_classes(), device='cuda', prep=True):
+def gen_deconv(imgs, model, target_index=1, classes=(), device='cuda', prep=True):
     """
     Visualize model responses given multiple images
     """
@@ -285,7 +278,7 @@ def gen_deconv(imgs, model, target_index=1, classes=get_imagenet_classes(), devi
     deconv.remove_hook()
     return masks
 
-def gen_deconv_target(imgs, model, target_index=None, classes=get_imagenet_classes(), device='cuda', prep=True):
+def gen_deconv_target(imgs, model, target_index=None, classes=(), device='cuda', prep=True):
     """
     Visualize model responses given multiple images
     """
