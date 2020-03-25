@@ -21,12 +21,12 @@ def main():
 
     if args.method == 'clustered':
         G = condense_leaves(G)
-        write_path = path.replace('.json', '-clustered')
+        write_path = path.replace('.json', '-clustered.json')
         write_graph(G, write_path)
 
     if args.parents:
         G = add_paths(G, args.parents, args.children)
-        write_path = path.replace('.json', '-modified')
+        write_path = path.replace('.json', '-modified.json')
         write_graph(G, write_path)
 
     Colors.green('==> Wrote tree to {}'.format(write_path))
