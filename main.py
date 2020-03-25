@@ -5,9 +5,9 @@ import torch.backends.cudnn as cudnn
 from nbdt import data, analysis, loss
 from saliency.Grad_CAM.main_gcam import gen_gcam_target
 import cv2
-
+import numpy as np
 import torchvision.transforms as transforms
-
+from PIL import Image
 import os
 import argparse
 
@@ -17,7 +17,6 @@ from nbdt.utils import (
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
-
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
 parser.add_argument('--batch-size', default=512, type=int,
@@ -127,11 +126,16 @@ if args.gradcam:
    trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
    testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
    assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
-   os.mkdir('./gcam_testing/')
+   try:
+       os.mkdir('./gcam_testing/')
+   except FileExistsError:
+       pass
    for i in range(5):
-       testset[i][0].save('./gcam_testing/original-{}.jpg'.format(i))
-       # cv2.imwrite('gcam-{}.jpg'.format(i), testset[i][1])
-       testset[i][1].save('./gcam_testing/gcam-{}.jpg'.format(i))
+       Image.fromarray(np.copy(testset[i][0])).save('./gcam_testing/original-{}.jpg'.format(i))
+       Image.fromarray(np.copy(testset[i][1])).save('./gcam_testing/gcam-{}.jpg'.format(i))
+# cv2.imwrite('gcam-{}.jpg'.format(i), testset[i][1])
+       #testset[i][0].save('./gcam_testing/original-{}.jpg'.format(i))
+       #testset[i][1].save('./gcam_testing/gcam-{}.jpg'.format(i))
    print('=====> save to ./gcam_testing')
    trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
    testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
@@ -270,18 +274,6 @@ if args.eval:
     analyzer.start_epoch(0)
     test(0, analyzer, checkpoint=False)
     exit()
-
-if args.gradcam:
-    print("===> gradcam")
-    #net.eval()
-    #with torch.no_grad():
-    for batch_idx, (inputs, targets) in enumerate(testloader):
-        print(type(inputs), inputs.shape, inputs)
-        cam_mask = gen_gcam_target(imgs=inputs.detach(), model=net, target_layer='layer4', target_index=targets.detach())
-        print(type(cam_mask), cam_mask.shape, cam_mask)
-        1/0
-    exit()
-
 
 for epoch in range(start_epoch, args.epochs):
     analyzer.start_epoch(epoch)

@@ -493,8 +493,7 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
             target_index=[target],
             transf=transf
             )
-        masked_img  = np.asarray(curr_img)
-        masked_img.setflags(write=1)
+        masked_img = np.array(curr_img)
         masked_img[cam_mask > np.percentile(cam_mask, self.cam_threshold)] = 0
         plt.imshow(masked_img)
         return curr_img, masked_img
