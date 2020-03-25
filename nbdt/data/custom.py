@@ -477,16 +477,25 @@ class Imagenet1000ExcludeLabels(ExcludeLabelsDataset):
             dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
             exclude_labels=exclude_labels)
 
+<<<<<<< HEAD
 
 class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
     def __init__(self, root='./data',
             *args, model, include_classes=('cat',), target_layer='layer4', cam_threshold=-1, **kwargs):
+=======
+class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
+    def __init__(self, root='./data',
+                 *args, model, include_classes=('cat',), target_layer='layer4', cam_threshold=-1, **kwargs):
+>>>>>>> 931905d094f8bb5744793b3fe2df9ee04e34e783
         super().__init__(root=root, include_classes=include_classes)
         self.model = model
         self.target_layer = target_layer
         self.cam_threshold = cam_threshold
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 931905d094f8bb5744793b3fe2df9ee04e34e783
     def __getitem__(self, i):
         curr_img, target = super().__getitem__(i)
         transf = imagenet.TinyImagenet200.transform_val()
@@ -496,8 +505,16 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
             target_layer=self.target_layer,
             target_index=[target],
             transf=transf
+<<<<<<< HEAD
             )
         print(curr_img, cam_mask)
         masked_img = curr_img[cam_mask > self.cam_threshold]
 
         return curr_img, masked_img
+=======
+        )
+        print(curr_img, cam_mask)
+        masked_img = curr_img[cam_mask > self.cam_threshold]
+
+        return curr_img, masked_img
+>>>>>>> 931905d094f8bb5744793b3fe2df9ee04e34e783
