@@ -155,6 +155,9 @@ python main.py --lr=0.01 --dataset=CIFAR10 --model=wrn28_10_cifar10 --path-graph
 
 # fine-tune the wrn pretrained checkpoint on CIFAR10 with soft tree supervision loss
 python main.py --lr=0.01 --dataset=CIFAR10 --model=wrn28_10_cifar10 --path-graph=./data/CIFAR10/graph-induced-wrn28_10_cifar10.json --path-resume=checkpoint/ckpt-CIFAR10-wrn28_10_cifar10.pth --tree-supervision-weight=10 --loss=SoftTreeSupLoss
+
+# fine-tune the wrn pretrained checkpoint on CIFAR10 with hard tree supervision loss with a tree that has multiple paths to a leaf
+python main.py --lr=0.01 --dataset=CIFAR10 --model=wrn28_10_cifar10 --path-graph=./data/CIFAR10/graph-induced-wrn28_10_cifar10.json --path-resume=checkpoint/ckpt-CIFAR10-wrn28_10_cifar10.pth --tree-supervision-weight=10 --loss=HardTreeSupLossMultiPath
 ```
 
 To train from scratch, use `--lr=0.1` and do not pass the `--path-resume` flag.
