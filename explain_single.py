@@ -62,12 +62,6 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # Data
 print('==> Preparing data..')
-transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
@@ -76,26 +70,22 @@ transform_test = transforms.Compose([
 
 dataset = getattr(data, args.dataset)
 
-if args.dataset in ('TinyImagenet200', 'Imagenet1000'):
-    default_input_size = 64 if args.dataset == 'TinyImagenet200' else 224
+if args.dataset in ('TinyImagenet200', 'Imagenet1000', 'TinyImagenet200IncludeClasses'):
+    default_input_size = 64 if 'TinyImagenet200' in args.dataset else 224
     input_size = args.input_size or default_input_size
-    transform_train = dataset.transform_train(input_size)
     transform_test = dataset.transform_val(input_size)
 
 dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
     keys=data.custom.keys, globals=globals())
 
-trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
 testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
+trainset=testset
 
-assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
-
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
 # load image
-img = transform_test(Image.open(args.image_path)).unsqueeze(0)
+img = transform_test(Image.open(args.image_path).resize((input_size, input_size))).unsqueeze(0)
 
 # Model
 print('==> Building model..')
@@ -145,7 +135,7 @@ populate_kwargs(args, analyzer_kwargs, class_analysis,
 analyzer = class_analysis(**analyzer_kwargs)
 
 # run inference
+net.eval()
 outputs = net(img.to(device))
-print(analyzer)
 
 analyzer.inf(outputs)

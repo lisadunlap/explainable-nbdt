@@ -1,8 +1,9 @@
 import networkx as nx
 import json
 import random
+import numpy as np
 from nltk.corpus import wordnet as wn
-from nbdt.utils import DATASETS, METHODS, DATASET_TO_FOLDER_NAME
+from nbdt.utils import DATASETS, METHODS, DATASET_TO_FOLDER_NAME, Colors
 from networkx.readwrite.json_graph import node_link_data, node_link_graph
 from sklearn.cluster import AgglomerativeClustering
 from pathlib import Path
@@ -49,6 +50,11 @@ def get_parser():
         help='(induced graph) Metric used for computing similarity')
     parser.add_argument('--json-path', type=str, default='',
                         help='Path to json file of graph')
+    parser.add_argument("--parents", nargs='*', type=str,
+                        help="extra paths to add, this should be a list of parents")
+    parser.add_argument("--children", nargs='*', type=str,
+                        help="extra paths to add, this should be a list of \
+                        children corresponding to the parent nodes")
     return parser
 
 
@@ -479,3 +485,32 @@ def pick_unseen_hypernym(G, common_hypernyms):
         candidate = deepest_synset(common_hypernyms)
         wnid = synset_to_wnid(candidate)
     return candidate
+
+def find_leaf_parents(G):
+    parents = [n for n in G.nodes if 'f' in n]
+    return [G.neighbors(n) for n in parents]
+
+def condense_leaves(G):
+    """ For nodes who have children that are leaves and children
+    that are other nodes, moves the leaves to be a child of one of
+    its neighbor nodes (this only works well for small graphs)
+    """
+    for node in G.nodes():
+        parents = [n for n in G.neighbors(node) if 'f' in n]
+        leaves = [n for n in G.neighbors(node) if 'n' in n]
+        if len(list(G.neighbors(node))) > 0 and (len(parents) > 0 and len(leaves) > 0):
+            #randomly put the leaves with the a parent on the same level
+            for leaf in leaves:
+                G.add_edge(np.random.choice(parents), leaf)
+                G.remove_edge(node, leaf)
+
+    return prune_single_successor_nodes(G)
+
+def add_paths(G, parents, children):
+    """ Randomly adds paths in the tree so that each class has
+    NUM_PATHS paths
+    """
+    for (parent, node) in zip(parents, children):
+        G.add_edge(parent, node)
+        Colors.green('==> added path from {} to {}'.format(parent, node))
+    return G

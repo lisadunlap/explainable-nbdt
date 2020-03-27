@@ -2,6 +2,7 @@ import torchvision.datasets as datasets
 import torch
 import numpy as np
 from torch.utils.data import Dataset
+import torchvision.transforms as transforms
 from collections import defaultdict
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
@@ -27,8 +28,7 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'CIFAR100ResampleLabels', 'TinyImagenet200ResampleLabels',
                    'Imagenet1000ResampleLabels', 'CIFAR10CombineClasses',
                    'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
-                   'Imagenet1000CombineClasses', )
-
+                   'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM')
 keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes')
 
 
@@ -279,6 +279,9 @@ class ResampleLabelsDataset(Dataset):
                 new_to_old.append(old)
         return new_to_old
 
+    def get_dataset(self):
+        return self.dataset
+
     def __getitem__(self, index_new):
         index_old = self.new_to_old[index_new]
         sample, label_old = self.dataset[index_old]
@@ -504,6 +507,22 @@ class TinyImagenet200IncludeClasses(IncludeClassesDataset):
             dataset=imagenet.TinyImagenet200(*args, root=root, **kwargs),
             include_classes=include_classes)
 
+    @staticmethod
+    def transform_train(input_size=64):
+        return transforms.Compose([
+            transforms.RandomCrop(input_size, padding=8),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262]),
+        ])
+
+    @staticmethod
+    def transform_val(input_size=-1):
+        return transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262]),
+        ])
+
 
 class Imagenet1000IncludeClasses(IncludeClassesDataset):
 
@@ -557,3 +576,26 @@ class Imagenet1000ExcludeLabels(ExcludeLabelsDataset):
         super().__init__(
             dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
             exclude_labels=exclude_labels)
+
+class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
+    def __init__(self, root='./data',
+                 *args, model, include_classes=('cat',), target_layer='layer4', cam_threshold=-1, **kwargs):
+        super().__init__(root=root, include_classes=include_classes)
+        self.model = model
+        self.target_layer = target_layer
+        self.cam_threshold = cam_threshold
+
+    def __getitem__(self, i):
+        curr_img, target = super().__getitem__(i)
+        transf = imagenet.TinyImagenet200.transform_val()
+        cam_mask = gen_gcam_target(
+            imgs=[curr_img],
+            model=self.model,
+            target_layer=self.target_layer,
+            target_index=[target],
+            transf=transf
+        )
+        print(curr_img, cam_mask)
+        masked_img = curr_img[cam_mask > self.cam_threshold]
+
+        return curr_img, masked_img
