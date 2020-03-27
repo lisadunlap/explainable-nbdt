@@ -3,14 +3,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import defaultdict
 from nbdt.data.custom import Node
+import numpy as np
 from nbdt.utils import Colors
 
-__all__ = names = ('HardTreeSupLoss', 'SoftTreeSupLoss', 'CrossEntropyLoss')
+__all__ = names = ('HardTreeSupLoss', 'SoftTreeSupLoss', 'CrossEntropyLoss', 'HardTreeSupLossMultiPath')
 keys = (
     'path_graph', 'path_wnids', 'max_leaves_supervised',
     'min_leaves_supervised', 'weighted_average', 'tree_supervision_weight',
     'classes'
 )
+
+
+def convert_to_onehot(indices, num_classes):
+    vec = np.zeros(num_classes)
+    for i in indices:
+        vec[i] = 1
+    return vec
 
 def add_arguments(parser):
     parser.add_argument('--path-graph', help='Path to graph-*.json file.')  # WARNING: hard-coded suffix -build in generate_fname
@@ -55,6 +63,7 @@ class TreeSupLoss(nn.Module):
         self.tree_supervision_weight = tree_supervision_weight
         self.weighted_average = weighted_average
         self.criterion = criterion
+        self.tree_criterion = nn.BCEWithLogitsLoss()
 
 
 class HardTreeSupLoss(TreeSupLoss):
@@ -91,13 +100,13 @@ class HardTreeSupLoss(TreeSupLoss):
 
             key = node.num_classes
             assert outputs_sub.size(0) == len(targets_sub)
+            print('targets sub ',targets_sub[0])
             outputs_subs[key].append(outputs_sub)
             targets_subs[key].extend(targets_sub)
 
         for key in outputs_subs:
             outputs_sub = torch.cat(outputs_subs[key], dim=0)
             targets_sub = torch.Tensor(targets_subs[key]).long().to(outputs_sub.device)
-
             if not outputs_sub.size(0):
                 continue
             fraction = outputs_sub.size(0) / float(num_losses) \
@@ -109,6 +118,7 @@ class HardTreeSupLoss(TreeSupLoss):
     def inference(cls, node, outputs, targets, weighted_average=False):
         classes = [node.old_to_new_classes[int(t)] for t in targets]
         selector = [bool(cls) for cls in classes]
+        print('-------- classes: ', classes)
         targets_sub = [cls[0] for cls in classes if cls]
 
         _outputs = outputs[selector]
@@ -162,13 +172,66 @@ class SoftTreeSupLoss(HardTreeSupLoss):
 
             old_indices, new_indices = [], []
             for index_child in range(len(node.children)):
-                old = node.new_to_old_classes[index_child]
-                old_indices.extend(old)
-                new_indices.extend([index_child] * len(old))
-
-            # assert len(set(old_indices)) == len(old_indices), (
-            #     'All old indices must be unique in order for this operation '
-            #     'to be correct.'
-            # )
-            class_probs[:,old_indices] *= output[:,new_indices]
+                old_indexes = node.new_to_old_classes[index_child]
+                for index_old in old_indexes:
+                    class_probs[:,index_old] *= output[:,index_child]
         return class_probs
+
+class HardTreeSupLossMultiPath(HardTreeSupLoss):
+
+    def forward(self, outputs, targets):
+        """
+        The supplementary losses are all uniformly down-weighted so that on
+        average, each sample incurs half of its loss from standard cross entropy
+        and half of its loss from all nodes.
+
+        The code below is structured weirdly to minimize number of tensors
+        constructed and moved from CPU to GPU or vice versa. In short,
+        all outputs and targets for nodes with 2 children are gathered and
+        moved onto GPU at once. Same with those with 3, with 4 etc. On CIFAR10,
+        the max is 2. On CIFAR100, the max is 8.
+        """
+        loss = self.criterion(outputs, targets)
+        num_losses = outputs.size(0) * len(self.nodes) / 2.
+
+        outputs_subs = defaultdict(lambda: [])
+        targets_subs = defaultdict(lambda: [])
+        targets_ints = [int(target) for target in targets.cpu().long()]
+        for node in self.nodes:
+            if self.max_leaves_supervised > 0 and \
+                    node.num_leaves > self.max_leaves_supervised:
+                continue
+
+            if self.min_leaves_supervised > 0 and \
+                    node.num_leaves < self.min_leaves_supervised:
+                continue
+
+            _, outputs_sub, targets_sub = HardTreeSupLossMultiPath.inference(
+                node, outputs, targets_ints, self.weighted_average)
+
+            key = node.num_classes
+            assert outputs_sub.size(0) == len(targets_sub)
+            outputs_subs[key].append(outputs_sub)
+            targets_subs[key].extend(targets_sub)
+
+        for key in outputs_subs:
+            outputs_sub = torch.cat(outputs_subs[key], dim=0)
+            targets_sub = torch.Tensor(targets_subs[key]).long().to(outputs_sub.device).type_as(outputs_sub)
+            if not outputs_sub.size(0):
+                continue
+            fraction = outputs_sub.size(0) / float(num_losses) \
+                * self.tree_supervision_weight
+            loss += self.tree_criterion(outputs_sub, targets_sub) * fraction
+        return loss
+
+    @classmethod
+    def inference(cls, node, outputs, targets, weighted_average=False):
+        classes = [node.old_to_new_classes[int(t)] for t in targets]
+        selector = [bool(cls) for cls in classes]
+        #convert to muli label one hot vector
+        targets_sub = [convert_to_onehot(cls, node.num_classes) for cls in classes if cls]
+        _outputs = outputs[selector]
+        if _outputs.size(0) == 0:
+            return selector, _outputs[:, :node.num_classes], targets_sub
+        outputs_sub = cls.get_output_sub(_outputs, node, weighted_average)
+        return selector, outputs_sub, targets_sub
