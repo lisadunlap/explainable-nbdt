@@ -31,6 +31,8 @@ parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 
 # extra general options for main script
+parser.add_argument('--checkpoint-fname', default='',
+                    help='Overrides checkpoint name generation')
 parser.add_argument('--path-resume', default='',
                     help='Overrides checkpoint path generation')
 parser.add_argument('--name', default='',
@@ -115,7 +117,7 @@ if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
-checkpoint_fname = generate_fname(**vars(args))
+checkpoint_fname = args.checkpoint_fname or generate_fname(**vars(args))
 resume_path = args.path_resume or './checkpoint/{}.pth'.format(checkpoint_fname)
 if args.resume:
     # Load checkpoint.
