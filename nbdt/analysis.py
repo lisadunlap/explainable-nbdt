@@ -1,4 +1,4 @@
-from nbdt.graph import get_root, get_wnids, synset_to_name, wnid_to_synset, get_leaves
+from nbdt.graph import get_root, get_wnids, synset_to_name, wnid_to_synset, get_leaves, get_non_leaves
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
     DEFAULT_CIFAR100_WNIDS, DEFAULT_TINYIMAGENET200_TREE,
@@ -15,6 +15,7 @@ import csv
 import networkx as nx
 import os
 import json
+from collections import defaultdict
 
 
 __all__ = names = (
@@ -319,7 +320,6 @@ class SingleInference(HardEmbeddedDecisionRules):
         print(f'NBDT-Soft Accuracy: {accuracy}%, {self.correct}/{self.total}')
 
 
-
 class HardFullTreePrior(Noop):
     accepts_path_graph_analysis = True
     accepts_path_wnids = True
@@ -446,3 +446,42 @@ class HardFullTreePrior(Noop):
             with open(cls_path, 'w') as f:
                 json.dump(json_data, f)
             print("Json saved to %s" % cls_path)
+
+class AllNodesPrior(Noop):
+     """Evaluate model on decision tree prior. Evaluation is deterministic."""
+     """Evaluates on all intermediate nodes """
+    def __init__(self, trainset, testset, path_graph_analysis, path_wnids, 
+              skip_selector=False, weighted_average=False):
+        super().__init__(trainset, testset, path_graph_analysis, path_wnids, weighted_average)
+        self.skip_selector = skip_selector
+        self.correct, self.total = defaultdict(int), defaultdict(int)
+
+    def update_batch(self, outputs, predicted, targets, **kwargs):
+        Noop.update_batch(self, outputs, predicted, targets)
+        intermediate_nodes = get_non_leaves(self.G)
+
+        for eval_node, target_node in ...:
+            self.update_single(outputs, predicted, targets, eval_node, target_node, **kwargs)
+
+        accuracy = round(sum(self.correct.values()) / float(sum(self.total.values)), 4) * 100
+        return f'TreePrior: {accuracy}%'
+
+    def update_single(self, outputs, predicted, targets, eval_node, target_node, **kwargs):
+        assert eval_node in [node.wnid for node in self.nodes]\
+             and target_node in [node.wnid for node in self.nodes],\
+         "eval or target node not in tree: {}".format([node.wnid for node in self.nodes])
+
+        node = self.wnid_to_node[eval_node]
+        assert target_node in node.children,\
+         "target node not in children: {}".format(node.children)
+        outputs_sub = HardTreeSupLoss.get_output_sub(
+         outputs, node, self.weighted_average)
+        _, preds_sub = torch.max(outputs_sub, dim=1)
+        predicted = list(map(int, preds_sub.cpu()))
+        n_samples = outputs.size(0)
+        targets = np.full((1, n_samples), node.children.index(target_node))
+        self.total[(eval_node, target_node)] += n_samples
+        self.correct[(eval_node, target_node)] += (predicted == targets).sum().item()
+        return (predicted == targets).sum().item(), n_samples
+        
+
