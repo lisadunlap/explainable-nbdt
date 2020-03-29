@@ -21,7 +21,7 @@ from collections import defaultdict
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'ConfusionMatrixJointNodes',
     'IgnoredSamples', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference', 'HardFullTreePrior')
+    'SingleInference', 'HardFullTreePrior', 'AllNodesPrior')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average', 'trainset', 'testset', 'json_save_path')
 
 
@@ -447,7 +447,7 @@ class HardFullTreePrior(Noop):
                 json.dump(json_data, f)
             print("Json saved to %s" % cls_path)
 
-class AllNodesPrior(Noop):
+class AllNodesPrior(HardFullTreePrior):
     """Evaluate model on decision tree prior. Evaluation is deterministic."""
     """Evaluates on all intermediate nodes """
     def __init__(self, trainset, testset, path_graph_analysis, path_wnids, 
