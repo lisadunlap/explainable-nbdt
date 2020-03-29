@@ -12,6 +12,7 @@ import torchvision.transforms as transforms
 
 import os
 import argparse
+import wandb
 
 import models
 from nbdt.utils import (
@@ -49,6 +50,8 @@ parser.add_argument('--input-size', type=int,
                     'input-size + 32.')
 parser.add_argument('--image-path', default='./data/samples/bcats.jpg',
                     help='path to image')
+parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
+parser.add_argument('--wandb', action='store_true', default='log using wandb')
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -60,14 +63,21 @@ data.custom.set_default_values(args)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+experiment_name = args.experiment_name if args.experiment_name else '{}-{}-{}'.format(args.model, args.dataset, args.analysis)
+if args.wandb:
+    wandb.init(project=experiment_name, name='main', entity='lisadunlap')
+    wandb.config.update({
+        k: v for k, v in vars(args).items() if (isinstance(v, str) or isinstance(v, int) or isinstance(v, float))
+    })
+
 # Data
 print('==> Preparing data..')
-transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
+# transform_train = transforms.Compose([
+#     transforms.RandomCrop(32, padding=4),
+#     transforms.RandomHorizontalFlip(),
+#     transforms.ToTensor(),
+#     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+# ])
 
 transform_test = transforms.Compose([
     transforms.ToTensor(),
@@ -86,12 +96,9 @@ dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
     keys=data.custom.keys, globals=globals())
 
-trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
 testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
+trainset=testset
 
-assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
-
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
 # load image
@@ -142,7 +149,7 @@ analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
-analyzer = class_analysis(**analyzer_kwargs)
+analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
 
 # run inference
 outputs = net(img.to(device))

@@ -36,15 +36,13 @@ class Noop:
     accepts_trainset = lambda trainset, **kwargs: trainset
     accepts_testset = lambda testset, **kwargs: testset
 
-    def __init__(self, trainset, testset, experiment_name):
+    def __init__(self, trainset, testset, experiment_name, use_wandb=False):
         set_np_printoptions()
 
         self.trainset = trainset
         self.testset = testset
 
         self.epoch = None
-        print('INITIALIZING PROJECT ', experiment_name)
-        wandb.init(project=experiment_name, name='analysis')
 
     def start_epoch(self, epoch):
         self.epoch = epoch
@@ -70,8 +68,8 @@ class Noop:
 
 class ConfusionMatrix(Noop):
 
-    def __init__(self, trainset, testset, experiment_name):
-        super().__init__(trainset, testset, experiment_name)
+    def __init__(self, trainset, testset, experiment_name, use_wandb=False):
+        super().__init__(trainset, testset, experiment_name, use_wandb)
         self.k = len(trainset.classes)
         self.m = None
 
@@ -126,8 +124,8 @@ class HardEmbeddedDecisionRules(Noop):
     accepts_weighted_average = True
 
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
-            weighted_average=False):
-        super().__init__(trainset, testset, experiment_name)
+            weighted_average=False, use_wandb=False):
+        super().__init__(trainset, testset, experiment_name, use_wandb)
         self.nodes = Node.get_nodes(path_graph, path_wnids, trainset.classes)
         self.G = self.nodes[0].G
         self.wnid_to_node = {node.wnid: node for node in self.nodes}
@@ -141,6 +139,9 @@ class HardEmbeddedDecisionRules(Noop):
         self.total = 0
         self.class_accuracies = {c:0 for c in self.classes}
         self.class_totals = {c: 0 for c in self.classes}
+        self.use_wandb = use_wandb
+        if self.use_wandb:
+            wandb.init(project=experiment_name, name='Analysis', reinit=True, entity='lisadunlap')
 
     def update_batch(self, outputs, predicted, targets):
         super().update_batch(outputs, predicted, targets)
@@ -164,11 +165,7 @@ class HardEmbeddedDecisionRules(Noop):
         for i in range(len(predicted)):
             self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
             self.class_totals[self.classes[targets[i]]] += 1
-        for c in self.class_accuracies:
-            self.class_accuracies[c] = (float(self.class_accuracies[c])/float(self.class_totals[c]))*100
         accuracy = round(self.correct / float(self.total), 4) * 100
-        data = [[v for k,v in self.class_accuracies.items()]]
-        wandb.log({"class accuracies": wandb.Table(data=data, columns=self.classes)})
         return f'NBDT-Hard: {accuracy}%'
 
     def traverse_tree(self, _, wnid_to_pred_selector, n_samples):
@@ -198,14 +195,17 @@ class HardEmbeddedDecisionRules(Noop):
         super().end_test(epoch)
         accuracy = round(self.correct / self.total * 100., 2)
         print(f'NBDT-Hard Accuracy: {accuracy}%, {self.correct}/{self.total}')
+        if self.use_wandb:
+            data = [[(self.class_accuracies[k]/self.class_totals[k])*100 for k in self.class_accuracies.keys()]]
+            wandb.log({"class accuracies": wandb.Table(data=data, columns=self.classes)})
 
 
 class SoftEmbeddedDecisionRules(HardEmbeddedDecisionRules):
     """Evaluation is soft."""
 
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
-            weighted_average=False):
-        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids)
+            weighted_average=False, use_wandb=False):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb)
         self.num_classes = len(trainset.classes)
 
     def update_batch(self, outputs, predicted, targets):
@@ -218,23 +218,22 @@ class SoftEmbeddedDecisionRules(HardEmbeddedDecisionRules):
         for i in range(len(predicted)):
             self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
             self.class_totals[self.classes[targets[i]]] += 1
-        for c in self.class_accuracies:
-            self.class_accuracies[c] = (float(self.class_accuracies[c])/float(self.class_totals[c]))*100
         accuracy = round(self.correct / float(self.total), 4) * 100
-        data = [v for k,v in self.class_accuracies.items()]
-        wandb.log({"class accuracies": wandb.Table(data=data, columns=self.classes)})
         return f'NBDT-Soft: {accuracy}%'
 
     def end_test(self, epoch):
         accuracy = round(self.correct / self.total * 100., 2)
         print(f'NBDT-Soft Accuracy: {accuracy}%, {self.correct}/{self.total}')
+        if self.use_wandb:
+            data = [[(self.class_accuracies[k] / self.class_totals[k]) * 100 for k in self.class_accuracies.keys()]]
+            wandb.log({"class accuracies": wandb.Table(data=data, columns=self.classes)})
 
 class SingleInference(HardEmbeddedDecisionRules):
     """Inference on a single image ."""
 
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
-            weighted_average=False):
-        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids)
+            weighted_average=False, use_wandb=False):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb)
         self.num_classes = len(trainset.classes)
 
     def single_traversal(self, _, wnid_to_pred_selector, n_samples):
@@ -268,13 +267,8 @@ class SingleInference(HardEmbeddedDecisionRules):
         n_samples = 1
         predicted = self.single_traversal(
             [], wnid_to_pred_selector, n_samples)
-        wandb.log({"path": predicted})
+        wandb.log({"examples": [wandb.Image(img.cpu().numpy(), caption=str(predicted))]})
         print("inference: ", predicted)
-
-    def end_test(self, epoch):
-        accuracy = round(self.correct / self.total * 100., 2)
-        print(f'NBDT-Soft Accuracy: {accuracy}%, {self.correct}/{self.total}')
-
 
 
 class HardFullTreePrior(Noop):
