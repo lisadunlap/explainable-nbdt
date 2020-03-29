@@ -448,21 +448,22 @@ class HardFullTreePrior(Noop):
             print("Json saved to %s" % cls_path)
 
 class AllNodesPrior(Noop):
-     """Evaluate model on decision tree prior. Evaluation is deterministic."""
-     """Evaluates on all intermediate nodes """
+    """Evaluate model on decision tree prior. Evaluation is deterministic."""
+    """Evaluates on all intermediate nodes """
     def __init__(self, trainset, testset, path_graph_analysis, path_wnids, 
               skip_selector=False, weighted_average=False):
         super().__init__(trainset, testset, path_graph_analysis, path_wnids, weighted_average)
         self.skip_selector = skip_selector
         self.correct, self.total = defaultdict(int), defaultdict(int)
+        self.hypotheses = defaultdict(dict)
 
     def update_batch(self, outputs, predicted, targets, **kwargs):
         Noop.update_batch(self, outputs, predicted, targets)
         intermediate_nodes = get_non_leaves(self.G)
 
-        for eval_node, target_node in ...:
-            self.update_single(outputs, predicted, targets, eval_node, target_node, **kwargs)
-
+        for eval_node in intermediate_nodes:
+            for target_node in self.wnid_to_node[eval_node].children:
+                self.update_single(outputs, predicted, targets, eval_node, target_node, **kwargs)
         accuracy = round(sum(self.correct.values()) / float(sum(self.total.values)), 4) * 100
         return f'TreePrior: {accuracy}%'
 
@@ -480,8 +481,12 @@ class AllNodesPrior(Noop):
         predicted = list(map(int, preds_sub.cpu()))
         n_samples = outputs.size(0)
         targets = np.full((1, n_samples), node.children.index(target_node))
+        target_leaves = get_leaves(self.G, root=target_node)
+
         self.total[(eval_node, target_node)] += n_samples
         self.correct[(eval_node, target_node)] += (predicted == targets).sum().item()
+        self.hypotheses[eval_node][target_node] = [self.wnid_to_class[leaf] for leaf in target_leaves]
+
         return (predicted == targets).sum().item(), n_samples
         
 
