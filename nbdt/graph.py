@@ -301,6 +301,34 @@ def read_graph(path):
         return node_link_graph(json.load(f))
 
 
+def wordnet_graph_to_hypotheses(G):
+    """ Takes in graph returned by `build_minimal_wordnet_graph` and
+        returns a dictionary with key: intermediate node wnid,
+        value: list of dicts, each dict representing a child node.
+        Example: {'f01': ['animal', 'vehicle']} """
+    roots = get_roots(G)
+    all_hypotheses = {}
+    for root in roots:
+        curr_hyp = root_to_hypotheses(G, root)
+        all_hypotheses.update(curr_hyp)
+    return all_hypotheses
+
+def root_to_hypotheses(G, root):
+    nodes = [root]
+    hypotheses = {}
+    single_child_tracker = {} # tracks child: ancestor
+    while nodes:
+        curr = nodes.pop(0)
+        children = G.succ[curr]
+        child_is_leaf = [is_leaf(G, c) for c in children]
+        if all(child_is_leaf):
+            continue
+        #hypotheses[curr] = children
+        hypotheses[curr] = [c for c in children]
+        nodes.extend([c for c in children if not is_leaf(G, c)])
+
+    return hypotheses
+
 ################
 # INDUCED TREE #
 ################
