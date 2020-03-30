@@ -49,7 +49,7 @@ parser.add_argument('--input-size', type=int,
                     help='Set transform train and val. Samples are resized to '
                     'input-size + 32.')
 parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
-parser.add_argument('--wandb', action='store_true', default='log using wandb')
+parser.add_argument('--wandb', action='store_true', help='log using wandb')
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -59,7 +59,8 @@ args = parser.parse_args()
 
 data.custom.set_default_values(args)
 
-experiment_name = args.experiment_name if args.experiment_name else '{}-{}-{}'.format(args.model, args.dataset, args.analysis)
+experiment_name = args.experiment_name if args.experiment_name \
+    else '{}-{}-{}-{}'.format(args.model, args.dataset, args.loss, args.analysis)
 
 if args.wandb:
     wandb.init(project=experiment_name, name='main', entity='lisadunlap')
@@ -225,10 +226,14 @@ def test(epoch, analyzer, checkpoint=True):
                 % (test_loss/(batch_idx+1), 100.*correct/total, correct, total, extra))
 
     if args.wandb:
-        wandb.log({
-            'loss':  test_loss/(batch_idx+1),
-            'accuracy': 100.*correct/total
-        })
+        if args.eval:
+            wandb.run.summary["best_accuracy"] = 100.*correct/total
+            wandb.run.summary["best_loss"] = test_loss/(batch_idx+1)
+        else:
+            wandb.log({
+                'loss':  test_loss/(batch_idx+1),
+                'accuracy': 100.*correct/total
+            }, step=epoch)
 
     # Save checkpoint.
     acc = 100.*correct/total

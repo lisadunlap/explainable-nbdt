@@ -1,4 +1,4 @@
-from nbdt.graph import get_root, get_wnids, synset_to_name, wnid_to_synset, get_leaves
+from nbdt.graph import get_root, get_roots, get_wnids, synset_to_name, wnid_to_synset, get_leaves
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
     DEFAULT_CIFAR100_WNIDS, DEFAULT_TINYIMAGENET200_TREE,
@@ -7,6 +7,7 @@ from nbdt.utils import (
 )
 from nbdt.loss import HardTreeSupLoss, SoftTreeSupLoss
 from nbdt.data.custom import Node
+from generate_vis import generate_vis, build_tree
 from networkx.readwrite.json_graph import node_link_data, node_link_graph
 import torch
 import torch.nn as nn
@@ -280,7 +281,7 @@ class HardFullTreePrior(Noop):
     """Evaluates model on a decision tree prior. Evaluation is deterministic."""
     """Evaluates on entire tree, tracks all paths."""
     def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path, csv_save_path=None,
-                 weighted_average=False):
+                 weighted_average=False, use_wandb=False):
         super().__init__(trainset, testset, experiment_name)
         # weird, sometimes self.classes are wnids, and sometimes they are direct classes.
         # just gotta do a check. Its basically CIFAR vs wordnet
@@ -306,6 +307,9 @@ class HardFullTreePrior(Noop):
         self.json_save_path = json_save_path
 
         self.class_to_wnid = {self.wnid_to_class[wnid]:wnid for wnid in self.wnids}
+        self.use_wandb = use_wandb
+        if self.use_wandb:
+            wandb.init(project=experiment_name, name='Analysis', reinit=True, entity='lisadunlap')
 
     def update_batch(self, outputs, predicted, targets):
         wnid_to_pred_selector = {}
@@ -349,7 +353,7 @@ class HardFullTreePrior(Noop):
         return leaf_wnids
 
     def end_test(self, epoch):
-        if self.csv_save_path is not None:
+        if self.csv_save_path is not None or self.use_wandb:
             self.write_to_csv(self.csv_save_path)
         self.write_to_json(self.json_save_path)
 
@@ -371,6 +375,8 @@ class HardFullTreePrior(Noop):
             index = [cls for cls in self.classes]
         df = pd.DataFrame(data=new_columns, index=index)
         df.to_csv(path)
+        if self.use_wandb:
+            wandb.log({"examples": wandb.Table(data=df.to_numpy(), columns=list(df.columns))})
         print("CSV saved to %s" % path)
 
     def write_to_json(self, path):
@@ -396,4 +402,9 @@ class HardFullTreePrior(Noop):
             cls_path = path + cls + '.json'
             with open(cls_path, 'w') as f:
                 json.dump(json_data, f)
+            root=next(get_roots(G))
+            tree = build_tree(G, root)
+            generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls)
+            if self.use_wandb:
+                wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
             print("Json saved to %s" % cls_path)
