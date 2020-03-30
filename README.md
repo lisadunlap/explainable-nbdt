@@ -236,3 +236,18 @@ To run inference on a single image, run `explain_single.py`, passing in the mode
 ```
 python explain_single.py --dataset=CIFAR10 --model=wrn28_10 --path-graph=./data/CIFAR10/graph-induced-wrn28_10_cifar10.json --resume
 ```
+
+## Modify Graph
+
+You can modify a given graph in 2 ways: either you can cluster leaves with no siblings or add paths given parent nodes and wnids
+
+
+To cluster:
+```
+python modify_tree.py --json-path=./data/CIFAR10/graph-induced-wrn28_10_cifar10.json --dataset CIFAR10 --method clustered
+```
+
+To add custom paths:
+```
+python modify_tree.py --json-path=./data/CIFAR10/graph-induced-wrn28_10_cifar10.json --dataset CIFAR10 --parents f00000010 --children n02958343
+```

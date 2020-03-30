@@ -86,8 +86,9 @@ transform_test = transforms.Compose([
 
 dataset = getattr(data, args.dataset)
 
+# , 'TinyImagenet200IncludeClasses'
 if args.dataset in ('TinyImagenet200', 'Imagenet1000'):
-    default_input_size = 64 if args.dataset == 'TinyImagenet200' else 224
+    default_input_size = 64 if 'TinyImagenet200' in args.dataset else 224
     input_size = args.input_size or default_input_size
     transform_train = dataset.transform_train(input_size)
     transform_test = dataset.transform_val(input_size)
@@ -101,8 +102,8 @@ testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, t
 
 assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=0)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
 Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
 

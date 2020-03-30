@@ -65,6 +65,9 @@ class Noop:
     def end_epoch(self, epoch):
         assert epoch == self.epoch
 
+    def write_to_csv(self, path):
+        pass
+
 
 class ConfusionMatrix(Noop):
 
@@ -268,6 +271,9 @@ class SingleInference(HardEmbeddedDecisionRules):
         predicted = self.single_traversal(
             [], wnid_to_pred_selector, n_samples)
         wandb.log({"examples": [wandb.Image(img.cpu().numpy(), caption=str(predicted))]})
+        cls = self.wnid_to_class.get(predicted[-1], None)
+        pred = -1 if cls is None else self.classes.index(cls)
+        print("class: ", pred)
         print("inference: ", predicted)
 
 
