@@ -323,7 +323,6 @@ def root_to_hypotheses(G, root):
         child_is_leaf = [is_leaf(G, c) for c in children]
         if all(child_is_leaf):
             continue
-        #hypotheses[curr] = children
         hypotheses[curr] = [c for c in children]
         nodes.extend([c for c in children if not is_leaf(G, c)])
 
@@ -333,12 +332,13 @@ def hypothesis_to_test_classes(hyp_node_wnid, hyp_wnids, test_wnids):
     """ hyp_node_wnid: wnid of current node
         hyp_wnid: list of hypothesis wnids (children of hyp_node_wnid)
         test_wnids: list of test classes wnids
-        returns: list of lists, each list containing test class wnids
-            matching the corresponding hypothesis choice
+        returns: dict {hyp_node_wnid: lst} with each element of lst being
+            a dict: {wnid: matching_test_classes}
         example (using label instead of wnids): hypothesis_to_test_classes(
+            "entity",
             ["animal", "vehicle"],
             ["elephant", "jetpack", "ship", "fish"])
-            -> [["elephant, "fish"], ["jetpack", "ship"]] """
+            -> {"entity": {"animal": ["elephant, "fish"]}, {"vehicle": ["jetpack", "ship"]}} """
     get_hyponyms_deep = lambda word_synset: [i for i in word_synset.closure(lambda s:s.hyponyms())]
     hyp_synsets, test_synsets = [wnid_to_synset(x) for x in hyp_wnids], [wnid_to_synset(x) for x in test_wnids]
     test_classes_result = []
@@ -346,8 +346,8 @@ def hypothesis_to_test_classes(hyp_node_wnid, hyp_wnids, test_wnids):
     for hyp in hyp_synsets:
         curr_hyponyms = get_hyponyms_deep(hyp)
         valid_hyponyms = [cls for cls in test_synsets if cls in curr_hyponyms]
-        test_classes_result.append(valid_hyponyms)
-    return test_classes_result
+        test_classes_result.append({synset_to_wnid(hyp): valid_hyponyms})
+    return {hyp_node_wnid: test_classes_result}
 
 
 ################
