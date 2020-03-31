@@ -329,6 +329,27 @@ def root_to_hypotheses(G, root):
 
     return hypotheses
 
+def hypothesis_to_test_classes(hyp_node_wnid, hyp_wnids, test_wnids):
+    """ hyp_node_wnid: wnid of current node
+        hyp_wnid: list of hypothesis wnids (children of hyp_node_wnid)
+        test_wnids: list of test classes wnids
+        returns: list of lists, each list containing test class wnids
+            matching the corresponding hypothesis choice
+        example (using label instead of wnids): hypothesis_to_test_classes(
+            ["animal", "vehicle"],
+            ["elephant", "jetpack", "ship", "fish"])
+            -> [["elephant, "fish"], ["jetpack", "ship"]] """
+    get_hyponyms_deep = lambda word_synset: [i for i in word_synset.closure(lambda s:s.hyponyms())]
+    hyp_synsets, test_synsets = [wnid_to_synset(x) for x in hyp_wnids], [wnid_to_synset(x) for x in test_wnids]
+    test_classes_result = []
+
+    for hyp in hyp_synsets:
+        curr_hyponyms = get_hyponyms_deep(hyp)
+        valid_hyponyms = [cls for cls in test_synsets if cls in curr_hyponyms]
+        test_classes_result.append(valid_hyponyms)
+    return test_classes_result
+
+
 ################
 # INDUCED TREE #
 ################
