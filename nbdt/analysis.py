@@ -48,7 +48,7 @@ class Noop:
         self.testset = testset
         self.use_wandb = use_wandb
         if self.use_wandb:
-            wandb.init(project=experiment_name, name=run_name, reinit=True, entity='lisadunlap')
+            wandb.init(project=experiment_name, name=run_name, reinit=True)
 
         self.epoch = None
 
