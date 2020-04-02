@@ -28,8 +28,7 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'CIFAR100ResampleLabels', 'TinyImagenet200ResampleLabels',
                    'Imagenet1000ResampleLabels', 'CIFAR10CombineClasses',
                    'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
-                   'Imagenet1000CombineClasses', )
-
+                   'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM')
 keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes')
 
 
