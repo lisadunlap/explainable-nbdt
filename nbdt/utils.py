@@ -21,7 +21,8 @@ DATASET_TO_FOLDER_NAME = {
     'CIFAR100': 'CIFAR100',
     'TinyImagenet200': 'tiny-imagenet-200',
     'TinyImagenet200IncludeClasses': 'tiny-imagenet-200-custom',
-    'Imagenet1000' : 'imagenet-1000', 'TinyImagenet200CombineClasses': 'tiny-imagenet-200-custom-combined'
+    'Imagenet1000' : 'imagenet-1000',
+    'TinyImagenet200CombineClasses': 'tiny-imagenet-200-custom-combined'
 }
 
 # main script constants

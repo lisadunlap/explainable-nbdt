@@ -23,11 +23,14 @@ import pandas as pd
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
     'SingleInference', 'HardFullTreePrior')
-keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average', 'trainset', 'testset', 'json_save_path', 'experiment_name')
+keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
+        'trainset', 'testset', 'json_save_path', 'experiment_name')
 
 
 def add_arguments(parser):
     parser.add_argument('--json-save-path', default=None, type=str,
+                    help='Directory to save jsons under for full tree analysis')
+    parser.add_argument('--csv-save-path', default=None, type=str,
                     help='Directory to save jsons under for full tree analysis')
     parser.add_argument('--path-graph-analysis', default=None, type=str,
                     help='path for graph for analysis')
@@ -37,11 +40,15 @@ class Noop:
     accepts_trainset = lambda trainset, **kwargs: trainset
     accepts_testset = lambda testset, **kwargs: testset
 
-    def __init__(self, trainset, testset, experiment_name, use_wandb=False):
+    def __init__(self, trainset, testset, experiment_name,
+                 use_wandb=False, run_name="Noop"):
         set_np_printoptions()
 
         self.trainset = trainset
         self.testset = testset
+        self.use_wandb = use_wandb
+        if self.use_wandb:
+            wandb.init(project=experiment_name, name=run_name, reinit=True, entity='lisadunlap')
 
         self.epoch = None
 
@@ -128,8 +135,9 @@ class HardEmbeddedDecisionRules(Noop):
     accepts_weighted_average = True
 
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
-            weighted_average=False, use_wandb=False):
-        super().__init__(trainset, testset, experiment_name, use_wandb)
+            weighted_average=False, use_wandb=False, run_name="HardEmbeddedDecisionRules"):
+        super().__init__(trainset, testset, experiment_name, use_wandb,
+                         run_name=run_name)
         self.nodes = Node.get_nodes(path_graph, path_wnids, trainset.classes)
         self.G = self.nodes[0].G
         self.wnid_to_node = {node.wnid: node for node in self.nodes}
@@ -143,9 +151,7 @@ class HardEmbeddedDecisionRules(Noop):
         self.total = 0
         self.class_accuracies = {c:0 for c in self.classes}
         self.class_totals = {c: 0 for c in self.classes}
-        self.use_wandb = use_wandb
-        if self.use_wandb:
-            wandb.init(project=experiment_name, name='Analysis', reinit=True, entity='lisadunlap')
+
 
     def update_batch(self, outputs, predicted, targets):
         super().update_batch(outputs, predicted, targets)
@@ -198,6 +204,7 @@ class HardEmbeddedDecisionRules(Noop):
     def end_test(self, epoch):
         super().end_test(epoch)
         accuracy = round(self.correct / self.total * 100., 2)
+        wandb.run.summary["accuracy"] = accuracy
         print(f'NBDT-Hard Accuracy: {accuracy}%, {self.correct}/{self.total}')
         if self.use_wandb:
             data = [[(self.class_accuracies[k]/self.class_totals[k])*100 for k in self.class_accuracies.keys()]]
@@ -208,8 +215,9 @@ class SoftEmbeddedDecisionRules(HardEmbeddedDecisionRules):
     """Evaluation is soft."""
 
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
-            weighted_average=False, use_wandb=False):
-        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb)
+            weighted_average=False, use_wandb=False, run_name="SoftEmbeddedDecisionRules"):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
+                         run_name=run_name)
         self.num_classes = len(trainset.classes)
 
     def update_batch(self, outputs, predicted, targets):
@@ -236,8 +244,9 @@ class SingleInference(HardEmbeddedDecisionRules):
     """Inference on a single image ."""
 
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
-            weighted_average=False, use_wandb=False):
-        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb)
+            weighted_average=False, use_wandb=False, run_name="SingleInference"):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
+                         run_name=run_name)
         self.num_classes = len(trainset.classes)
 
     def single_traversal(self, _, wnid_to_pred_selector, n_samples):
@@ -286,9 +295,9 @@ class HardFullTreePrior(Noop):
 
     """Evaluates model on a decision tree prior. Evaluation is deterministic."""
     """Evaluates on entire tree, tracks all paths."""
-    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path, csv_save_path=None,
-                 weighted_average=False, use_wandb=False):
-        super().__init__(trainset, testset, experiment_name)
+    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path='./out/full_tree_analysis/',
+                 csv_save_path='./out/cifar100.csv', weighted_average=False, use_wandb=False, run_name="HardFullTreePrior"):
+        super().__init__(trainset, testset, experiment_name, use_wandb, run_name=run_name)
         # weird, sometimes self.classes are wnids, and sometimes they are direct classes.
         # just gotta do a check. Its basically CIFAR vs wordnet
         self.nodes = Node.get_nodes(path_graph_analysis, path_wnids, trainset.classes)
@@ -311,11 +320,10 @@ class HardFullTreePrior(Noop):
             self.node_counts[cls].update({wnid:0 for wnid in self.wnids})
         self.csv_save_path = csv_save_path
         self.json_save_path = json_save_path
+        if not os.path.exists(self.json_save_path):
+            os.mkdir(self.json_save_path)
 
         self.class_to_wnid = {self.wnid_to_class[wnid]:wnid for wnid in self.wnids}
-        self.use_wandb = use_wandb
-        if self.use_wandb:
-            wandb.init(project=experiment_name, name='Analysis', reinit=True, entity='lisadunlap')
 
     def update_batch(self, outputs, predicted, targets):
         wnid_to_pred_selector = {}
@@ -381,8 +389,8 @@ class HardFullTreePrior(Noop):
             index = [cls for cls in self.classes]
         df = pd.DataFrame(data=new_columns, index=index)
         df.to_csv(path)
-        if self.use_wandb:
-            wandb.log({"examples": wandb.Table(data=df.to_numpy(), columns=list(df.columns))})
+        # if self.use_wandb:
+        #     wandb.log({"examples": wandb.Table(data=new_columns, columns=df.columns.to_numpy())})
         print("CSV saved to %s" % path)
 
     def write_to_json(self, path):
@@ -410,7 +418,7 @@ class HardFullTreePrior(Noop):
                 json.dump(json_data, f)
             root=next(get_roots(G))
             tree = build_tree(G, root)
-            generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls)
+            generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
             if self.use_wandb:
                 wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
             print("Json saved to %s" % cls_path)
