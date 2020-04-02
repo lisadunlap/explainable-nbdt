@@ -100,7 +100,6 @@ class HardTreeSupLoss(TreeSupLoss):
 
             key = node.num_classes
             assert outputs_sub.size(0) == len(targets_sub)
-            print('targets sub ',targets_sub[0])
             outputs_subs[key].append(outputs_sub)
             targets_subs[key].extend(targets_sub)
 
@@ -118,7 +117,6 @@ class HardTreeSupLoss(TreeSupLoss):
     def inference(cls, node, outputs, targets, weighted_average=False):
         classes = [node.old_to_new_classes[int(t)] for t in targets]
         selector = [bool(cls) for cls in classes]
-        print('-------- classes: ', classes)
         targets_sub = [cls[0] for cls in classes if cls]
 
         _outputs = outputs[selector]
@@ -234,7 +232,7 @@ class HardTreeSupLossMultiPath(HardTreeSupLoss):
     def inference(cls, node, outputs, targets, weighted_average=False):
         classes = [node.old_to_new_classes[int(t)] for t in targets]
         selector = [bool(cls) for cls in classes]
-        #convert to muli label one hot vector
+        # convert to muli label one hot vector
         targets_sub = [convert_to_onehot(cls, node.num_classes) for cls in classes if cls]
         _outputs = outputs[selector]
         if _outputs.size(0) == 0:

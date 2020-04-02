@@ -1,4 +1,4 @@
-from nbdt.graph import get_root, get_wnids, synset_to_name, wnid_to_synset, get_leaves
+from nbdt.graph import get_root, get_roots, get_wnids, synset_to_name, wnid_to_synset, get_leaves
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
     DEFAULT_CIFAR100_WNIDS, DEFAULT_TINYIMAGENET200_TREE,
@@ -7,6 +7,7 @@ from nbdt.utils import (
 )
 from nbdt.loss import HardTreeSupLoss, SoftTreeSupLoss
 from nbdt.data.custom import Node
+from generate_vis import generate_vis, build_tree
 from networkx.readwrite.json_graph import node_link_data, node_link_graph
 import torch
 import torch.nn as nn
@@ -15,17 +16,21 @@ import csv
 import networkx as nx
 import os
 import json
+import wandb
+import pandas as pd
 
 
 __all__ = names = (
-    'Noop', 'ConfusionMatrix', 'ConfusionMatrixJointNodes',
-    'IgnoredSamples', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
+    'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
     'SingleInference', 'HardFullTreePrior')
-keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average', 'trainset', 'testset', 'json_save_path')
+keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
+        'trainset', 'testset', 'json_save_path', 'experiment_name')
 
 
 def add_arguments(parser):
     parser.add_argument('--json-save-path', default=None, type=str,
+                    help='Directory to save jsons under for full tree analysis')
+    parser.add_argument('--csv-save-path', default=None, type=str,
                     help='Directory to save jsons under for full tree analysis')
     parser.add_argument('--path-graph-analysis', default=None, type=str,
                     help='path for graph for analysis')
@@ -35,11 +40,15 @@ class Noop:
     accepts_trainset = lambda trainset, **kwargs: trainset
     accepts_testset = lambda testset, **kwargs: testset
 
-    def __init__(self, trainset, testset):
+    def __init__(self, trainset, testset, experiment_name,
+                 use_wandb=False, run_name="Noop"):
         set_np_printoptions()
 
         self.trainset = trainset
         self.testset = testset
+        self.use_wandb = use_wandb
+        if self.use_wandb:
+            wandb.init(project=experiment_name, name=run_name, reinit=True)
 
         self.epoch = None
 
@@ -70,8 +79,8 @@ class Noop:
 
 class ConfusionMatrix(Noop):
 
-    def __init__(self, trainset, testset):
-        super().__init__(trainset, testset)
+    def __init__(self, trainset, testset, experiment_name, use_wandb=False):
+        super().__init__(trainset, testset, experiment_name, use_wandb)
         self.k = len(trainset.classes)
         self.m = None
 
@@ -118,63 +127,6 @@ class ConfusionMatrix(Noop):
         return ConfusionMatrix.normalize(self.m, 0)
 
 
-class ConfusionMatrixJointNodes(ConfusionMatrix):
-    """Calculates confusion matrix for tree of joint nodes"""
-
-    def __init__(self, trainset, testset):
-        assert hasattr(trainset, 'nodes'), (
-            'Dataset must be for joint nodes, in order to run joint-node '
-            'specific confusion matrix analysis. You can run the regular '
-            'confusion matrix analysis instead.'
-        )
-        self.nodes = trainset.nodes
-
-    def start_test(self, epoch):
-        self.ms = [
-            np.zeros((node.num_classes, node.num_classes))
-            for node in self.nodes
-        ]
-
-    def update_batch(self, outputs, predicted, targets):
-        for m, pred, targ in zip(self.ms, predicted.T, targets.T):
-            pred = pred.numpy().ravel()
-            targ = targ.numpy().ravel()
-            ConfusionMatrix.update(m, pred, targ)
-
-    def end_test(self, epoch):
-        mean_accs = []
-
-        for m, node in zip(self.ms, self.nodes):
-            class_accs = ConfusionMatrix.normalize(m, 0).diagonal()
-            mean_acc = np.mean(class_accs)
-            print(node.wnid, node.classes, mean_acc, class_accs)
-            mean_accs.append(mean_acc)
-
-        min_acc = min(mean_accs)
-        min_node = self.nodes[mean_accs.index(min_acc)]
-        print(f'Node ({min_node.wnid}) with lowest accuracy ({min(mean_accs)}%)'
-              f' (sorted accuracies): {sorted(mean_accs)}')
-
-class IgnoredSamples(Noop):
-    """ Counter for number of ignored samples in decision tree """
-
-    def __init__(self, trainset, testset):
-        super().__init__(trainset, testset)
-        self.ignored = None
-
-    def start_test(self, epoch):
-        super().start_test(epoch)
-        self.ignored = 0
-
-    def update_batch(self, outputs, predicted, targets):
-        super().update_batch(outputs, predicted, targets)
-        self.ignored += outputs[:,0].eq(-1).sum().item()
-
-    def end_test(self, epoch):
-        super().end_test(epoch)
-        print("Ignored Samples: {}".format(self.ignored))
-
-
 class HardEmbeddedDecisionRules(Noop):
     """Evaluation is hard."""
 
@@ -182,9 +134,10 @@ class HardEmbeddedDecisionRules(Noop):
     accepts_path_wnids = True
     accepts_weighted_average = True
 
-    def __init__(self, trainset, testset, path_graph, path_wnids,
-            weighted_average=False):
-        super().__init__(trainset, testset)
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
+            weighted_average=False, use_wandb=False, run_name="HardEmbeddedDecisionRules"):
+        super().__init__(trainset, testset, experiment_name, use_wandb,
+                         run_name=run_name)
         self.nodes = Node.get_nodes(path_graph, path_wnids, trainset.classes)
         self.G = self.nodes[0].G
         self.wnid_to_node = {node.wnid: node for node in self.nodes}
@@ -196,6 +149,9 @@ class HardEmbeddedDecisionRules(Noop):
         self.weighted_average = weighted_average
         self.correct = 0
         self.total = 0
+        self.class_accuracies = {c:0 for c in self.classes}
+        self.class_totals = {c: 0 for c in self.classes}
+
 
     def update_batch(self, outputs, predicted, targets):
         super().update_batch(outputs, predicted, targets)
@@ -216,6 +172,9 @@ class HardEmbeddedDecisionRules(Noop):
             predicted, wnid_to_pred_selector, n_samples).to(targets.device)
         self.total += n_samples
         self.correct += (predicted == targets).sum().item()
+        for i in range(len(predicted)):
+            self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
+            self.class_totals[self.classes[targets[i]]] += 1
         accuracy = round(self.correct / float(self.total), 4) * 100
         return f'NBDT-Hard: {accuracy}%'
 
@@ -245,15 +204,20 @@ class HardEmbeddedDecisionRules(Noop):
     def end_test(self, epoch):
         super().end_test(epoch)
         accuracy = round(self.correct / self.total * 100., 2)
+        wandb.run.summary["accuracy"] = accuracy
         print(f'NBDT-Hard Accuracy: {accuracy}%, {self.correct}/{self.total}')
+        if self.use_wandb:
+            data = [[(self.class_accuracies[k]/self.class_totals[k])*100 for k in self.class_accuracies.keys()]]
+            wandb.log({"class accuracies": wandb.Table(data=data, columns=self.classes)})
 
 
 class SoftEmbeddedDecisionRules(HardEmbeddedDecisionRules):
     """Evaluation is soft."""
 
-    def __init__(self, trainset, testset, path_graph, path_wnids,
-            weighted_average=False):
-        super().__init__(trainset, testset, path_graph, path_wnids)
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
+            weighted_average=False, use_wandb=False, run_name="SoftEmbeddedDecisionRules"):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
+                         run_name=run_name)
         self.num_classes = len(trainset.classes)
 
     def update_batch(self, outputs, predicted, targets):
@@ -263,19 +227,26 @@ class SoftEmbeddedDecisionRules(HardEmbeddedDecisionRules):
         predicted = bayesian_outputs.max(1)[1].to(targets.device)
         self.total += n_samples
         self.correct += (predicted == targets).sum().item()
+        for i in range(len(predicted)):
+            self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
+            self.class_totals[self.classes[targets[i]]] += 1
         accuracy = round(self.correct / float(self.total), 4) * 100
         return f'NBDT-Soft: {accuracy}%'
 
     def end_test(self, epoch):
         accuracy = round(self.correct / self.total * 100., 2)
         print(f'NBDT-Soft Accuracy: {accuracy}%, {self.correct}/{self.total}')
+        if self.use_wandb:
+            data = [[(self.class_accuracies[k] / self.class_totals[k]) * 100 for k in self.class_accuracies.keys()]]
+            wandb.log({"class accuracies": wandb.Table(data=data, columns=self.classes)})
 
 class SingleInference(HardEmbeddedDecisionRules):
     """Inference on a single image ."""
 
-    def __init__(self, trainset, testset, path_graph, path_wnids,
-            weighted_average=False):
-        super().__init__(trainset, testset, path_graph, path_wnids)
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
+            weighted_average=False, use_wandb=False, run_name="SingleInference"):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
+                         run_name=run_name)
         self.num_classes = len(trainset.classes)
 
     def single_traversal(self, _, wnid_to_pred_selector, n_samples):
@@ -309,15 +280,11 @@ class SingleInference(HardEmbeddedDecisionRules):
         n_samples = 1
         predicted = self.single_traversal(
             [], wnid_to_pred_selector, n_samples)
+        wandb.log({"examples": [wandb.Image(img.cpu().numpy(), caption=str(predicted))]})
         cls = self.wnid_to_class.get(predicted[-1], None)
         pred = -1 if cls is None else self.classes.index(cls)
         print("class: ", pred)
         print("inference: ", predicted)
-
-    def end_test(self, epoch):
-        accuracy = round(self.correct / self.total * 100., 2)
-        print(f'NBDT-Soft Accuracy: {accuracy}%, {self.correct}/{self.total}')
-
 
 
 class HardFullTreePrior(Noop):
@@ -328,9 +295,9 @@ class HardFullTreePrior(Noop):
 
     """Evaluates model on a decision tree prior. Evaluation is deterministic."""
     """Evaluates on entire tree, tracks all paths."""
-    def __init__(self, trainset, testset, path_graph_analysis, path_wnids, json_save_path, csv_save_path=None,
-                 weighted_average=False):
-        super().__init__(trainset, testset)
+    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path='./out/full_tree_analysis/',
+                 csv_save_path='./out/cifar100.csv', weighted_average=False, use_wandb=False, run_name="HardFullTreePrior"):
+        super().__init__(trainset, testset, experiment_name, use_wandb, run_name=run_name)
         # weird, sometimes self.classes are wnids, and sometimes they are direct classes.
         # just gotta do a check. Its basically CIFAR vs wordnet
         self.nodes = Node.get_nodes(path_graph_analysis, path_wnids, trainset.classes)
@@ -353,6 +320,8 @@ class HardFullTreePrior(Noop):
             self.node_counts[cls].update({wnid:0 for wnid in self.wnids})
         self.csv_save_path = csv_save_path
         self.json_save_path = json_save_path
+        if not os.path.exists(self.json_save_path):
+            os.mkdir(self.json_save_path)
 
         self.class_to_wnid = {self.wnid_to_class[wnid]:wnid for wnid in self.wnids}
 
@@ -398,7 +367,7 @@ class HardFullTreePrior(Noop):
         return leaf_wnids
 
     def end_test(self, epoch):
-        if self.csv_save_path is not None:
+        if self.csv_save_path is not None or self.use_wandb:
             self.write_to_csv(self.csv_save_path)
         self.write_to_json(self.json_save_path)
 
@@ -420,6 +389,8 @@ class HardFullTreePrior(Noop):
             index = [cls for cls in self.classes]
         df = pd.DataFrame(data=new_columns, index=index)
         df.to_csv(path)
+        # if self.use_wandb:
+        #     wandb.log({"examples": wandb.Table(data=new_columns, columns=df.columns.to_numpy())})
         print("CSV saved to %s" % path)
 
     def write_to_json(self, path):
@@ -445,4 +416,9 @@ class HardFullTreePrior(Noop):
             cls_path = path + cls + '.json'
             with open(cls_path, 'w') as f:
                 json.dump(json_data, f)
+            root=next(get_roots(G))
+            tree = build_tree(G, root)
+            generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
+            if self.use_wandb:
+                wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
             print("Json saved to %s" % cls_path)

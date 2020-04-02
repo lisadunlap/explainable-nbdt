@@ -53,7 +53,6 @@ def generate_vis(path_template, data, name, fname, out_dir='out/'):
 
 def main():
     parser = get_parser()
-    parser.add_argument('--mode', default='normal', choices=['normal', 'weighted'], help='Type of visualization.')
     args = parser.parse_args()
 
     path = args.json_path
@@ -85,7 +84,7 @@ def setup_vis(args, path, out_dir='out/'):
     #fname = generate_fname(**vars(args)).replace('graph-', '', 1)
     fname = path.split('/')[-1].replace('.pth', '').replace('.json', '')
     print(fname)
-    if args.mode == 'weighted':
+    if args.method == 'weighted':
         generate_vis('vis/tree-weighted-template.html', tree, 'tree', fname, out_dir=out_dir)
     else:
         generate_vis('vis/tree-template.html', tree, 'tree', fname)
