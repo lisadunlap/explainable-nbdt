@@ -20,8 +20,8 @@ import json
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'ConfusionMatrixJointNodes',
     'IgnoredSamples', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference', 'HardFullTreePrior')
-keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average', 'trainset', 'testset', 'json_save_path')
+    'SingleInference', 'HardFullTreePrior', 'HardTrackNodes')
+keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average', 'trainset', 'testset', 'json_save_path', 'track_nodes')
 
 
 def add_arguments(parser):
@@ -29,6 +29,8 @@ def add_arguments(parser):
                     help='Directory to save jsons under for full tree analysis')
     parser.add_argument('--path-graph-analysis', default=None, type=str,
                     help='path for graph for analysis')
+    parser.add_argument('--track-nodes', default=None, type=str, nargs='*',
+                    help='node wnids to track')
 
 class Noop:
 
@@ -328,7 +330,7 @@ class HardFullTreePrior(Noop):
 
     """Evaluates model on a decision tree prior. Evaluation is deterministic."""
     """Evaluates on entire tree, tracks all paths."""
-    def __init__(self, trainset, testset, path_graph_analysis, path_wnids, json_save_path, csv_save_path=None,
+    def __init__(self, trainset, testset, path_graph_analysis, path_wnids, json_save_path,
                  weighted_average=False):
         super().__init__(trainset, testset)
         # weird, sometimes self.classes are wnids, and sometimes they are direct classes.
@@ -351,7 +353,6 @@ class HardFullTreePrior(Noop):
         self.class_counts = {cls:0 for cls in self.classes}  # count how many samples weve seen for each class
         for cls in self.classes:
             self.node_counts[cls].update({wnid:0 for wnid in self.wnids})
-        self.csv_save_path = csv_save_path
         self.json_save_path = json_save_path
 
         self.class_to_wnid = {self.wnid_to_class[wnid]:wnid for wnid in self.wnids}
@@ -398,29 +399,7 @@ class HardFullTreePrior(Noop):
         return leaf_wnids
 
     def end_test(self, epoch):
-        if self.csv_save_path is not None:
-            self.write_to_csv(self.csv_save_path)
         self.write_to_json(self.json_save_path)
-
-    def write_to_csv(self, path):
-        columns = {node:[] for node in get_leaves(self.G)}
-        for cls in self.classes:
-            for node in get_leaves(self.G):
-                if node in self.leaf_counts[cls]:
-                    columns[node].append(self.leaf_counts[cls][node])
-                else:
-                    columns[node].append(0)
-        new_columns = {}
-        for node in get_leaves(self.G):
-            new_columns["%s %s" % (synset_to_name(wnid_to_synset(node)), node)] = columns[node]
-        try:
-            int(self.classes[1:])
-            index = [self.wnid_to_name[cls] for cls in self.classes]
-        except:
-            index = [cls for cls in self.classes]
-        df = pd.DataFrame(data=new_columns, index=index)
-        df.to_csv(path)
-        print("CSV saved to %s" % path)
 
     def write_to_json(self, path):
         # create separate graph for each node
@@ -446,3 +425,54 @@ class HardFullTreePrior(Noop):
             with open(cls_path, 'w') as f:
                 json.dump(json_data, f)
             print("Json saved to %s" % cls_path)
+
+
+class HardTrackNodes(HardFullTreePrior):
+    accepts_path_graph_analysis = True
+    accepts_path_wnids = True
+    accepts_weighted_average = True
+    accepts_track_nodes = True
+
+    """Evaluates model on a decision tree prior. Evaluation is deterministic."""
+    """Evaluates on entire tree, tracks all paths. Additionally, tracks which images
+        go to each node by retaining their index numbers. Stores this into a json.
+        Note: only works if dataloader for evaluation is NOT shuffled."""
+    def __init__(self, trainset, testset, path_graph_analysis, path_wnids, json_save_path, track_nodes,
+                 weighted_average=False):
+        super().__init__(trainset, testset, path_graph_analysis, path_wnids, json_save_path,
+                         weighted_average)
+        self.track_nodes = {wnid:[] for wnid in track_nodes}
+
+    # return leaf node wnids corresponding to each output
+    def traverse_tree(self, wnid_to_pred_selector, nsamples, targets):
+        leaf_wnids = []
+        wnid_root = get_root(self.G)
+        node_root = self.wnid_to_node[wnid_root]
+        target_classes = targets.numpy()
+        for index in range(nsamples):
+            wnid, node = wnid_root, node_root
+            while node is not None:
+                pred_sub = wnid_to_pred_selector[node.wnid]
+                index_child = pred_sub[index]
+                wnid = node.children[index_child]
+                if wnid in self.track_nodes:
+                    self.track_nodes[wnid].append(self.total + index)
+                node = self.wnid_to_node.get(wnid, None)
+                try:
+                    self.node_counts[self.class_to_wnid[self.classes[target_classes[index]]]][wnid] += 1
+                except:
+                    self.node_counts[self.classes[target_classes[index]]][wnid] += 1
+            leaf_wnids.append(wnid)
+        return leaf_wnids
+
+    def end_test(self, epoch):
+        self.write_to_json(self.json_save_path)
+
+    def write_to_json(self, path):
+        # create separate graph for each node
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path))
+
+        with open(path, 'w') as f:
+            json.dump(self.track_nodes, f)
+        print("Json saved to %s" % path)
