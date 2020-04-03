@@ -32,6 +32,8 @@ parser.add_argument('--dataset', default='CIFAR10', choices=datasets)
 parser.add_argument('--model', default='ResNet18', choices=list(models.get_model_choices()))
 parser.add_argument('--vis-json-path', type=str, help='json path where node specific information is stored')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
+parser.add_argument('--perplexity', default=20, type=int, help='perplexity for tsne')
+parser.add_argument('--angle', default=0.2, type=float, help='angle for tsne')
 
 # extra general options for main script
 parser.add_argument('--checkpoint-fname', default='',
@@ -161,7 +163,7 @@ from sklearn.manifold import TSNE
 testset = dataset(**dataset_kwargs, root='./data', train=False, download=True)
 images = [testset[i][0] for i in samples_idx]
 
-tsne = TSNE(n_components=2, learning_rate=150, perplexity=10, angle=0.1, verbose=2).fit_transform(sample_vectors)
+tsne = TSNE(n_components=2, learning_rate=150, perplexity=args.perplexity, angle=args.angle, verbose=2).fit_transform(sample_vectors)
 tx, ty = tsne[:,0], tsne[:,1]
 tx = (tx-np.min(tx)) / (np.max(tx) - np.min(tx))
 ty = (ty-np.min(ty)) / (np.max(ty) - np.min(ty))
