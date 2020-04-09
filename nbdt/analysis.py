@@ -22,9 +22,9 @@ import pandas as pd
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference', 'HardFullTreePrior')
+    'SingleInference', 'HardFullTreePrior', 'HardEmbeddedDecisionRulesMultiPath')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
-        'trainset', 'testset', 'json_save_path', 'experiment_name')
+        'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path')
 
 
 def add_arguments(parser):
@@ -204,9 +204,9 @@ class HardEmbeddedDecisionRules(Noop):
     def end_test(self, epoch):
         super().end_test(epoch)
         accuracy = round(self.correct / self.total * 100., 2)
-        wandb.run.summary["accuracy"] = accuracy
         print(f'NBDT-Hard Accuracy: {accuracy}%, {self.correct}/{self.total}')
         if self.use_wandb:
+            wandb.run.summary["NBDT hard accuracy"] = accuracy
             data = [[(self.class_accuracies[k]/self.class_totals[k])*100 for k in self.class_accuracies.keys()]]
             wandb.log({"class accuracies": wandb.Table(data=data, columns=self.classes)})
 
@@ -292,6 +292,7 @@ class HardFullTreePrior(Noop):
     accepts_path_wnids = True
     accepts_json_save_path = True
     accepts_weighted_average = True
+    accepts_csv_save_path = True
 
     """Evaluates model on a decision tree prior. Evaluation is deterministic."""
     """Evaluates on entire tree, tracks all paths."""
