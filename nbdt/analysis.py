@@ -297,7 +297,7 @@ class HardFullTreePrior(Noop):
     """Evaluates model on a decision tree prior. Evaluation is deterministic."""
     """Evaluates on entire tree, tracks all paths."""
     def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path='./out/full_tree_analysis/',
-                weighted_average=False, use_wandb=False, run_name="HardFullTreePrior"):
+                 csv_save_path='./out/cifar100.csv', weighted_average=False, use_wandb=False, run_name="HardFullTreePrior"):
         super().__init__(trainset, testset, experiment_name, use_wandb, run_name=run_name)
         # weird, sometimes self.classes are wnids, and sometimes they are direct classes.
         # just gotta do a check. Its basically CIFAR vs wordnet
@@ -319,6 +319,7 @@ class HardFullTreePrior(Noop):
         self.class_counts = {cls:0 for cls in self.classes}  # count how many samples weve seen for each class
         for cls in self.classes:
             self.node_counts[cls].update({wnid:0 for wnid in self.wnids})
+        self.csv_save_path = csv_save_path
         self.json_save_path = json_save_path
         if not os.path.exists(self.json_save_path):
             os.mkdir(self.json_save_path)
@@ -367,7 +368,31 @@ class HardFullTreePrior(Noop):
         return leaf_wnids
 
     def end_test(self, epoch):
+        if self.csv_save_path is not None or self.use_wandb:
+            self.write_to_csv(self.csv_save_path)
         self.write_to_json(self.json_save_path)
+
+    def write_to_csv(self, path):
+        columns = {node:[] for node in get_leaves(self.G)}
+        for cls in self.classes:
+            for node in get_leaves(self.G):
+                if node in self.leaf_counts[cls]:
+                    columns[node].append(self.leaf_counts[cls][node])
+                else:
+                    columns[node].append(0)
+        new_columns = {}
+        for node in get_leaves(self.G):
+            new_columns["%s %s" % (synset_to_name(wnid_to_synset(node)), node)] = columns[node]
+        try:
+            int(self.classes[1:])
+            index = [self.wnid_to_name[cls] for cls in self.classes]
+        except:
+            index = [cls for cls in self.classes]
+        df = pd.DataFrame(data=new_columns, index=index)
+        df.to_csv(path)
+        # if self.use_wandb:
+        #     wandb.log({"examples": wandb.Table(data=new_columns, columns=df.columns.to_numpy())})
+        print("CSV saved to %s" % path)
 
     def write_to_json(self, path):
         # create separate graph for each node
@@ -392,12 +417,8 @@ class HardFullTreePrior(Noop):
             cls_path = path + cls + '.json'
             with open(cls_path, 'w') as f:
                 json.dump(json_data, f)
-            root=next(get_roots(G))
-            tree = build_tree(G, root)
-            generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
-            if self.use_wandb:
-                wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
             print("Json saved to %s" % cls_path)
+
 
 class HardTrackNodes(HardFullTreePrior):
     accepts_path_graph_analysis = True
@@ -410,9 +431,9 @@ class HardTrackNodes(HardFullTreePrior):
         go to each node by retaining their index numbers. Stores this into a json.
         Note: only works if dataloader for evaluation is NOT shuffled."""
     def __init__(self, trainset, testset, path_graph_analysis, path_wnids, json_save_path, track_nodes,
-                 weighted_average=False):
+                 csv_save_path='./out/cifar100.csv', weighted_average=False):
         super().__init__(trainset, testset, path_graph_analysis, path_wnids, json_save_path,
-                         weighted_average)
+                         csv_save_path, weighted_average)
         self.track_nodes = {wnid:[] for wnid in track_nodes}
 
     # return leaf node wnids corresponding to each output
@@ -447,3 +468,10 @@ class HardTrackNodes(HardFullTreePrior):
 
         with open(path, 'w') as f:
             json.dump(self.track_nodes, f)
+        print("Json saved to %s" % path)
+            root=next(get_roots(G))
+            tree = build_tree(G, root)
+            generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
+            if self.use_wandb:
+                wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
+            print("Json saved to %s" % cls_path)
