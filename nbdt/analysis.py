@@ -470,12 +470,12 @@ class HardTrackNodes(HardFullTreePrior):
         with open(path, 'w') as f:
             json.dump(self.track_nodes, f)
         print("Json saved to %s" % path)
-            root=next(get_roots(G))
-            tree = build_tree(G, root)
-            generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
-            if self.use_wandb:
-                wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
-            print("Json saved to %s" % cls_path)
+        root=next(get_roots(G))
+        tree = build_tree(G, root)
+        generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
+        if self.use_wandb:
+            wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
+        print("Json saved to %s" % cls_path)
 
 class SingleRISE(SingleInference):
     """Generate RISE saliency map for a single image ."""
