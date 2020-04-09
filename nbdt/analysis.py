@@ -476,3 +476,40 @@ class HardTrackNodes(HardFullTreePrior):
             if self.use_wandb:
                 wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
             print("Json saved to %s" % cls_path)
+
+class SingleRISE(SingleInference):
+    """Generate RISE saliency map for a single image ."""
+
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
+            weighted_average=False, use_wandb=False, run_name="SingleRISE"):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
+                         run_name=run_name)
+        self.rise = RISE(input_size=trainset[0].shape)
+
+    def inf(self, img):
+        wnid_to_pred_selector = {}
+        wnid_to_rise = {}
+        for node in self.nodes:
+            outputs_sub = HardTreeSupLoss.get_output_sub(
+                img, node, self.weighted_average)
+            selector = [1 for c in range(node.num_classes)]
+            if not any(selector):
+                continue
+            _, preds_sub = torch.max(outputs_sub, dim=1)
+            preds_sub = list(map(int, preds_sub.cpu()))
+            wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
+
+            rise_saliency = self.rise(img, node, self.weighted_average)
+            wnid_to_rise[node.wnid] = rise_saliency
+        n_samples = 1
+        predicted = self.single_traversal(
+            [], wnid_to_pred_selector, n_samples)
+        wandb.log({"examples": [wandb.Image(img.cpu().numpy(), caption=str(predicted))]})
+        cls = self.wnid_to_class.get(predicted[-1], None)
+        pred = -1 if cls is None else self.classes.index(cls)
+        print("class: ", pred)
+        print("inference: ", predicted)
+
+        for wnid, rise_output in wnid_to_rise.items():
+            wandb_rise = wandb.Image(rise_output.cpu().numpy(), caption=f"RISE (wnid={wnid})")
+            wandb.log({"examples": [wandb_rise]})

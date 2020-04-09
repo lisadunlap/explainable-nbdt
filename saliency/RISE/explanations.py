@@ -6,9 +6,8 @@ from tqdm import tqdm
 
 
 class RISE(nn.Module):
-    def __init__(self, model, input_size, gpu_batch=100):
+    def __init__(self, input_size, gpu_batch=100):
         super(RISE, self).__init__()
-        self.model = model
         self.input_size = input_size
         self.gpu_batch = gpu_batch
 
@@ -40,7 +39,7 @@ class RISE(nn.Module):
         self.masks = torch.from_numpy(self.masks).float().cuda()
         self.N = self.masks.shape[0]
 
-    def forward(self, x):
+    def forward(self, x, node, weighted_average):
         N = self.N
         _, _, H, W = x.size()
         # Apply array of filters to the image
@@ -49,7 +48,9 @@ class RISE(nn.Module):
         # p = nn.Softmax(dim=1)(model(stack)) processed in batches
         p = []
         for i in range(0, N, self.gpu_batch):
-            p.append(self.model(stack[i:min(i + self.gpu_batch, N)]))
+            curr_img = stack[i:min(i + self.gpu_batch, N)]
+            output_sub = HardTreeSupLoss.get_output_sub(curr_img, node, weighted_average)
+            p.append(output_sub)
         p = torch.cat(p)
         # Number of classes
         CL = p.size(1)
@@ -59,25 +60,25 @@ class RISE(nn.Module):
         return sal
     
     
-class RISEBatch(RISE):
-    def forward(self, x):
-        # Apply array of filters to the image
-        N = self.N
-        B, C, H, W = x.size()
-        stack = torch.mul(self.masks.view(N, 1, H, W), x.data.view(B * C, H, W))
-        stack = stack.view(B * N, C, H, W)
-        stack = stack
+# class RISEBatch(RISE):
+#     def forward(self, x):
+#         # Apply array of filters to the image
+#         N = self.N
+#         B, C, H, W = x.size()
+#         stack = torch.mul(self.masks.view(N, 1, H, W), x.data.view(B * C, H, W))
+#         stack = stack.view(B * N, C, H, W)
+#         stack = stack
 
-        #p = nn.Softmax(dim=1)(model(stack)) in batches
-        p = []
-        for i in range(0, N*B, self.gpu_batch):
-            p.append(self.model(stack[i:min(i + self.gpu_batch, N*B)]))
-        p = torch.cat(p)
-        CL = p.size(1)
-        p = p.view(N, B, CL)
-        sal = torch.matmul(p.permute(1, 2, 0), self.masks.view(N, H * W))
-        sal = sal.view(B, CL, H, W)
-        return sal
+#         #p = nn.Softmax(dim=1)(model(stack)) in batches
+#         p = []
+#         for i in range(0, N*B, self.gpu_batch):
+#             p.append(self.model(stack[i:min(i + self.gpu_batch, N*B)]))
+#         p = torch.cat(p)
+#         CL = p.size(1)
+#         p = p.view(N, B, CL)
+#         sal = torch.matmul(p.permute(1, 2, 0), self.masks.view(N, H * W))
+#         sal = sal.view(B, CL, H, W)
+#         return sal
 
 # To process in batches
 # def explain_all_batch(data_loader, explainer):
