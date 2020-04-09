@@ -149,6 +149,18 @@ if args.resume:
             net.load_state_dict(checkpoint)
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
+elif args.path_resume:
+    # Load checkpoint.
+    print('==> Resuming from checkpoint..')
+    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
+    if not os.path.exists(resume_path):
+        print('==> No checkpoint found. Skipping...')
+    else:
+        checkpoint = torch.load(resume_path)
+        net.load_state_dict(checkpoint['net'])
+        Colors.cyan(f'==> Checkpoint found at {resume_path}')
+
+
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',

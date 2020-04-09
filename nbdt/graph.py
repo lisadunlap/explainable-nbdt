@@ -513,7 +513,13 @@ def add_paths(G, parents, children):
     for (parent, node) in zip(parents, children):
         G.add_edge(parent, node)
         Colors.green('==> added path from {} to {}'.format(parent, node))
-    return balance_tree(G)
+    return prune_single_successor_nodes(balance_tree(G))
+
+def delete_paths(G, parents, children):
+    for (parent, node) in zip(parents, children):
+        G.remove_edge(parent, node)
+        Colors.green('==> removed path from {} to {}'.format(parent, node))
+    return prune_single_successor_nodes(balance_tree(G))
 
 def balance_tree(G):
     """ when there are more than two leaves in a parent node,
