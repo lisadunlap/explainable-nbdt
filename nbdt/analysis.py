@@ -22,7 +22,7 @@ import pandas as pd
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference', 'HardFullTreePrior', 'HardEmbeddedDecisionRulesMultiPath')
+    'SingleInference', 'HardFullTreePrior', 'HardEmbeddedDecisionRulesMultiPath', 'SingleRISE')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
         'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path')
 
