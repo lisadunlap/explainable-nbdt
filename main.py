@@ -7,7 +7,6 @@ import torch.backends.cudnn as cudnn
 from nbdt import data, analysis, loss
 
 import torchvision
-import torchvision.transforms as transforms
 
 import os
 import argparse
@@ -15,7 +14,8 @@ import wandb
 
 import models
 from nbdt.utils import (
-    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors
+    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors,
+    get_transform_from_name,
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
@@ -73,26 +73,9 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # Data
 print('==> Preparing data..')
-transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-
-transform_test = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-
 dataset = getattr(data, args.dataset)
 
-# , 'TinyImagenet200IncludeClasses'
-if args.dataset in ('TinyImagenet200', 'Imagenet1000'):
-    default_input_size = 64 if 'TinyImagenet200' in args.dataset else 224
-    input_size = args.input_size or default_input_size
-    transform_train = dataset.transform_train(input_size)
-    transform_test = dataset.transform_val(input_size)
+transform_train, transform_test = get_transform_from_name(args.dataset, dataset, args.input_size)
 
 dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
@@ -103,8 +86,8 @@ testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, t
 
 assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=0)
 
 Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
 

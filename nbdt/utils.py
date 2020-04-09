@@ -11,6 +11,8 @@ import numpy as np
 
 import torch.nn as nn
 import torch.nn.init as init
+import torchvision.transforms as transforms
+
 from pathlib import Path
 
 # tree-generation consntants
@@ -36,6 +38,8 @@ DEFAULT_TINYIMAGENET200_TREE = './data/tiny-imagenet-200/graph-wordnet-single.js
 DEFAULT_TINYIMAGENET200_WNIDS = './data/tiny-imagenet-200/wnids.txt'
 DEFAULT_IMAGENET1000_TREE = './data/imagenet-1000/graph-wordnet-single.json'
 DEFAULT_IMAGENET1000_WNIDS = './data/imagenet-1000/wnids.txt'
+DEFAULT_MINIPLACES_TREE = '/data/miniplaces/graph-default.json'
+DEFAULT_MINIPLACES_WNID = './data/miniplaces-wnids.txt'
 
 
 DATASET_TO_PATHS = {
@@ -54,6 +58,10 @@ DATASET_TO_PATHS = {
     'Imagenet1000': {
         'path_graph': DEFAULT_IMAGENET1000_TREE,
         'path_wnids': DEFAULT_IMAGENET1000_WNIDS
+    }
+    'MiniPlaces': {
+        'path_graph': DEFAULT_MINIPLACES_TREE,
+        'path_wnids': DEFAULT_MINIPLACES_WNID
     }
 }
 
@@ -76,6 +84,33 @@ def populate_kwargs(args, kwargs, object, name='Dataset', keys=(), globals={}):
             Colors.red(
                 f'Warning: {name} does not support custom '
                 f'{key}: {value}')
+
+
+def get_transform_from_name(dataset_name, dataset, input_size):
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    # , 'TinyImagenet200IncludeClasses'
+    if dataset_name in ('TinyImagenet200', 'Imagenet1000'):
+        default_input_size = 64 if 'TinyImagenet200' in dataset_name else 224
+        input_size = input_size or default_input_size
+        transform_train = dataset.transform_train(input_size)
+        transform_test = dataset.transform_val(input_size)
+
+    if dataset_name in ('MiniPlaces'):
+        transform_train = dataset.transform_train()
+        transform_test = dataset.transform_test()
+
+    return transform_train, transform_test
 
 
 class Colors:

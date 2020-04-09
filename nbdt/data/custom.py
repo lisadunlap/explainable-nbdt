@@ -14,6 +14,7 @@ from collections import defaultdict
 from nbdt.graph import get_wnids, read_graph, get_leaves, get_non_leaves, \
     get_leaf_weights
 from . import imagenet
+from PIL import Image
 import torch.nn as nn
 import random
 
@@ -28,8 +29,10 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'CIFAR100ResampleLabels', 'TinyImagenet200ResampleLabels',
                    'Imagenet1000ResampleLabels', 'CIFAR10CombineClasses',
                    'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
-                   'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM')
-keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes')
+                   'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM',
+                   'MiniPlaces',)
+keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes',
+        'photos_path', 'labels_path')
 
 
 def add_arguments(parser):
@@ -38,6 +41,9 @@ def add_arguments(parser):
     parser.add_argument('--exclude-labels', nargs='*', type=int)
     parser.add_argument('--include-classes', nargs='*', type=str)
     parser.add_argument('--combine-classes', nargs='+', type=str, action='append')
+    parser.add_argument('--photos-path', default='', type=str)
+    parser.add_argument('--labels-path', default='', type=str)
+
 
 
 def set_default_values(args):
@@ -599,3 +605,60 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
         masked_img = curr_img[cam_mask > self.cam_threshold]
 
         return curr_img, masked_img
+
+
+class MiniPlaces(Dataset): 
+    def __init__(self, photos_path, labels_path, transform):
+        # load in the data 
+        self.photos_path = photos_path
+        self.labels_path = labels_path
+        self.transform = transform
+        self.load_size = 224
+        self.images = []
+        self.labels = []
+
+        # read the text file
+        with open(self.labels_path, 'r') as f: 
+            for line in f:
+                path, label = line.strip().split(" ")
+                self.images.append(path)
+                self.labels.append(label)
+
+        self.images = np.array(self.images, np.object)
+        self.labels = np.array(self.labels, np.int64)
+        print("# images found at path '%s': %d" % (self.labels_path, self.images.shape[0]))
+
+    def __len__(self): 
+        return len(self.images)
+
+    def __getitem__(self, idx): 
+        image = Image.open(os.path.join(self.photos_path, self.images[idx]))
+        image = self.transform(image)
+        # label is the index of the correct category
+        label = self.labels[idx]
+        return (image, label)
+
+    @staticmethod
+    def transform_train():
+        transform_train = transforms.Compose([
+            transforms.RandomSizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            torchsample.transforms.RandomRotate(30),
+            torchsample.transforms.RandomGamma(0.5, 1.5),
+            torchsample.transforms.RandomSaturation(-0.8, 0.8),
+            torchsample.transforms.RandomBrightness(-0.3, 0.3),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
+        ])
+        return transform_train
+
+    @staticmethod
+    def transform_test():
+        transform_test = ransforms.Compose([
+            transforms.Scale(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        return transform_test
