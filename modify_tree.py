@@ -19,6 +19,15 @@ def main():
 
     G = read_graph(path)
 
+    ############# DEBUG ############
+    node = G.node['n04251144']
+    print(node)
+    node['label'] = "test"
+    print(node)
+    print([i for i in G.predecessors('n04251144')])
+    print([i for i in G.successors('n04251144')])
+    exit(0)
+
     if args.method == 'clustered':
         G = condense_leaves(G)
         write_path = path.replace('.json', '-clustered.json')

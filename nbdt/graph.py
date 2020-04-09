@@ -513,4 +513,30 @@ def add_paths(G, parents, children):
     for (parent, node) in zip(parents, children):
         G.add_edge(parent, node)
         Colors.green('==> added path from {} to {}'.format(parent, node))
+    return balance_tree(G)
+
+def balance_tree(G):
+    """ when there are more than two leaves in a parent node,
+    condense them into one parent (for balancing)"""
+    def check_balance(G):
+        for node in G.nodes():
+            try:
+                parents = [n for n in G.neighbors(node) if 'f' in n]
+                leaves = [n for n in G.neighbors(node) if 'n' in n]
+            except:
+                return None, None
+            if len(leaves) > 1 and len(parents) > 0:
+                return node, leaves
+        return None, None
+
+    node, leaves = check_balance(G)
+    while node != None:
+        new_parent = FakeSynset.create_from_offset(len(G.nodes))
+        G.add_node(new_parent.wnid)
+        for leaf in leaves:
+            G.add_edge(new_parent.wnid, leaf)
+            G.remove_edge(node, leaf)
+        G.add_edge(node, new_parent.wnid)
+        node, leaves = check_balance(G)
+        Colors.green('==> combined children {} to node {}'.format(leaves, new_parent.wnid))
     return G

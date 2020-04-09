@@ -11,6 +11,7 @@ import torchvision.transforms as transforms
 
 import os
 import argparse
+import wandb
 
 import models
 from nbdt.utils import (
@@ -31,6 +32,8 @@ parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 
 # extra general options for main script
+parser.add_argument('--checkpoint-fname', default='',
+                    help='Overrides checkpoint name generation')
 parser.add_argument('--path-resume', default='',
                     help='Overrides checkpoint path generation')
 parser.add_argument('--name', default='',
@@ -45,6 +48,8 @@ parser.add_argument('--analysis', choices=analysis.names, help='Run analysis aft
 parser.add_argument('--input-size', type=int,
                     help='Set transform train and val. Samples are resized to '
                     'input-size + 32.')
+parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
+parser.add_argument('--wandb', action='store_true', help='log using wandb')
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -54,6 +59,14 @@ args = parser.parse_args()
 
 data.custom.set_default_values(args)
 
+experiment_name = args.experiment_name if args.experiment_name \
+    else '{}-{}-{}-{}'.format(args.model, args.dataset, args.loss, args.analysis)
+
+if args.wandb:
+    wandb.init(project=experiment_name, name='main')
+    wandb.config.update({
+        k: v for k, v in vars(args).items() if (isinstance(v, str) or isinstance(v, int) or isinstance(v, float))
+    })
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
 start_epoch = 0  # start from epoch 0 or last checkpoint epoch
@@ -115,7 +128,7 @@ if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
-checkpoint_fname = generate_fname(**vars(args))
+checkpoint_fname = args.checkpoint_fname or generate_fname(**vars(args))
 resume_path = args.path_resume or './checkpoint/{}.pth'.format(checkpoint_fname)
 if args.resume:
     # Load checkpoint.
@@ -135,7 +148,6 @@ if args.resume:
         else:
             net.load_state_dict(checkpoint)
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
-
 
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
@@ -214,6 +226,16 @@ def test(epoch, analyzer, checkpoint=True):
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) %s'
                 % (test_loss/(batch_idx+1), 100.*correct/total, correct, total, extra))
 
+    if args.wandb:
+        if args.eval:
+            wandb.run.summary["best_accuracy"] = 100.*correct/total
+            wandb.run.summary["best_loss"] = test_loss/(batch_idx+1)
+        else:
+            wandb.log({
+                'loss':  test_loss/(batch_idx+1),
+                'accuracy': 100.*correct/total
+            }, step=epoch)
+
     # Save checkpoint.
     acc = 100.*correct/total
     print("Accuracy: {}, {}/{}".format(acc, correct, total))
@@ -237,7 +259,7 @@ analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
-analyzer = class_analysis(**analyzer_kwargs)
+analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
 
 
 if args.eval:

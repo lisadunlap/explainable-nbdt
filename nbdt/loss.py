@@ -100,7 +100,6 @@ class HardTreeSupLoss(TreeSupLoss):
 
             key = node.num_classes
             assert outputs_sub.size(0) == len(targets_sub)
-            print('targets sub ',targets_sub[0])
             outputs_subs[key].append(outputs_sub)
             targets_subs[key].extend(targets_sub)
 
@@ -118,7 +117,6 @@ class HardTreeSupLoss(TreeSupLoss):
     def inference(cls, node, outputs, targets, weighted_average=False):
         classes = [node.old_to_new_classes[int(t)] for t in targets]
         selector = [bool(cls) for cls in classes]
-        print('-------- classes: ', classes)
         targets_sub = [cls[0] for cls in classes if cls]
 
         _outputs = outputs[selector]
@@ -172,9 +170,15 @@ class SoftTreeSupLoss(HardTreeSupLoss):
 
             old_indices, new_indices = [], []
             for index_child in range(len(node.children)):
-                old_indexes = node.new_to_old_classes[index_child]
-                for index_old in old_indexes:
-                    class_probs[:,index_old] *= output[:,index_child]
+                old = node.new_to_old_classes[index_child]
+                old_indices.extend(old)
+                new_indices.extend([index_child] * len(old))
+
+            # assert len(set(old_indices)) == len(old_indices), (
+            #     'All old indices must be unique in order for this operation '
+            #     'to be correct.'
+            # )
+            class_probs[:,old_indices] *= output[:,new_indices]
         return class_probs
 
 class HardTreeSupLossMultiPath(HardTreeSupLoss):
@@ -228,7 +232,7 @@ class HardTreeSupLossMultiPath(HardTreeSupLoss):
     def inference(cls, node, outputs, targets, weighted_average=False):
         classes = [node.old_to_new_classes[int(t)] for t in targets]
         selector = [bool(cls) for cls in classes]
-        #convert to muli label one hot vector
+        # convert to muli label one hot vector
         targets_sub = [convert_to_onehot(cls, node.num_classes) for cls in classes if cls]
         _outputs = outputs[selector]
         if _outputs.size(0) == 0:
