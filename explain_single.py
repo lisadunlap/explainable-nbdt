@@ -65,7 +65,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 experiment_name = args.experiment_name if args.experiment_name else '{}-{}-{}'.format(args.model, args.dataset, args.analysis)
 if args.wandb:
-    wandb.init(project=experiment_name, name='main', entity='lisadunlap')
+    wandb.init(project=experiment_name, name='main')
     wandb.config.update({
         k: v for k, v in vars(args).items() if (isinstance(v, str) or isinstance(v, int) or isinstance(v, float))
     })
@@ -80,6 +80,8 @@ transform_test = transforms.Compose([
 
 dataset = getattr(data, args.dataset)
 
+if "input_size" is not None:
+    input_size = args.input_size
 if args.dataset in ('TinyImagenet200', 'Imagenet1000', 'TinyImagenet200IncludeClasses'):
     default_input_size = 64 if 'TinyImagenet200' in args.dataset else 224
     input_size = args.input_size or default_input_size
@@ -100,7 +102,7 @@ img = transform_test(Image.open(args.image_path).resize((input_size, input_size)
 # Model
 print('==> Building model..')
 model = getattr(models, args.model)
-model_kwargs = {'num_classes': 10 }
+model_kwargs = {'num_classes': 100}
 
 if args.pretrained:
     try:
@@ -148,4 +150,5 @@ analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, us
 net.eval()
 outputs = net(img.to(device))
 
-analyzer.inf(outputs)
+#analyzer.inf(outputs)
+analyzer.inf(img.to(device))

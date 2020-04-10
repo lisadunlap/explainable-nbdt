@@ -18,7 +18,8 @@ import os
 import json
 import wandb
 import pandas as pd
-
+from saliency.RISE.explanations import RISE
+from PIL import Image
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
@@ -484,21 +485,23 @@ class SingleRISE(SingleInference):
             weighted_average=False, use_wandb=False, run_name="SingleRISE"):
         super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
                          run_name=run_name)
-        self.rise = RISE(input_size=trainset[0].shape)
+        self.rise = RISE(input_size=trainset[0][0].shape)
 
     def inf(self, img):
+        print("=====> starting RISE", img.shape)
         wnid_to_pred_selector = {}
         wnid_to_rise = {}
         for node in self.nodes:
             outputs_sub = HardTreeSupLoss.get_output_sub(
                 img, node, self.weighted_average)
+            outputs_sub = nn.functional.softmax(outputs_sub, dim=1)
             selector = [1 for c in range(node.num_classes)]
             if not any(selector):
                 continue
             _, preds_sub = torch.max(outputs_sub, dim=1)
             preds_sub = list(map(int, preds_sub.cpu()))
             wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
-
+            print("HERE:", img.shape, outputs_sub.shape)
             rise_saliency = self.rise(img, node, self.weighted_average)
             wnid_to_rise[node.wnid] = rise_saliency
         n_samples = 1
@@ -513,3 +516,5 @@ class SingleRISE(SingleInference):
         for wnid, rise_output in wnid_to_rise.items():
             wandb_rise = wandb.Image(rise_output.cpu().numpy(), caption=f"RISE (wnid={wnid})")
             wandb.log({"examples": [wandb_rise]})
+            pil_im = Image.fromarray(rise_output.cpu().numpy())
+            pil_im.save(f"../out/RISE/RISE_{wnid}.jpg")
