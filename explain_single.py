@@ -51,7 +51,7 @@ parser.add_argument('--input-size', type=int,
 parser.add_argument('--image-path', default='./data/samples/bcats.jpg',
                     help='path to image')
 parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
-parser.add_argument('--wandb', action='store_true', default='log using wandb')
+parser.add_argument('--wandb', action='store_true', help='log using wandb')
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -80,6 +80,9 @@ transform_test = transforms.Compose([
 
 dataset = getattr(data, args.dataset)
 
+if args.input_size is not None:
+     input_size = args.input_size
+
 if args.dataset in ('TinyImagenet200', 'Imagenet1000', 'TinyImagenet200IncludeClasses'):
     default_input_size = 64 if 'TinyImagenet200' in args.dataset else 224
     input_size = args.input_size or default_input_size
@@ -96,11 +99,12 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 # load image
 img = transform_test(Image.open(args.image_path).resize((input_size, input_size))).unsqueeze(0)
+print("image size: ", img.shape)
 
 # Model
 print('==> Building model..')
 model = getattr(models, args.model)
-model_kwargs = {'num_classes': 10 }
+model_kwargs = {'num_classes': 10}
 
 if args.pretrained:
     try:
@@ -142,10 +146,15 @@ analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
-analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
+net.eval()
+
+if args.analysis == "SingleRISE":
+    analyzer = class_analysis(**analyzer_kwargs, net=net, experiment_name=experiment_name, use_wandb=args.wandb)
+else:
+    analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
 
 # run inference
-net.eval()
 outputs = net(img.to(device))
+print("outputs shape: ", outputs.shape)
 
-analyzer.inf(outputs)
+analyzer.inf(img.to(device), outputs)

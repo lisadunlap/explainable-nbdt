@@ -251,7 +251,7 @@ def test(epoch, analyzer, checkpoint=True):
     # Save checkpoint.
     acc = 100.*correct/total
     print("Accuracy: {}, {}/{}".format(acc, correct, total))
-    if acc > best_acc and checkpoint:
+    if (acc > best_acc and checkpoint) or args.pretrained:
         state = {
             'net': net.state_dict(),
             'acc': acc,

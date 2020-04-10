@@ -18,13 +18,18 @@ import os
 import json
 import wandb
 import pandas as pd
+from saliency.RISE.explanations import RISE
+from saliency.RISE.utils import get_cam
+from PIL import Image
+import cv2
 
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference', 'HardFullTreePrior', 'HardEmbeddedDecisionRulesMultiPath')
+    'SingleInference', 'HardFullTreePrior', 'HardEmbeddedDecisionRulesMultiPath', 'SingleRISE')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
-        'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path')
+        'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path',
+        'net')
 
 
 def add_arguments(parser):
@@ -245,7 +250,7 @@ class SingleInference(HardEmbeddedDecisionRules):
 
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
             weighted_average=False, use_wandb=False, run_name="SingleInference"):
-        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb=use_wandb,
                          run_name=run_name)
         self.num_classes = len(trainset.classes)
 
@@ -266,11 +271,11 @@ class SingleInference(HardEmbeddedDecisionRules):
             node = self.wnid_to_node.get(wnid, None)
         return path
 
-    def inf(self, img):
+    def inf(self, img, outputs):
         wnid_to_pred_selector = {}
         for node in self.nodes:
             outputs_sub = HardTreeSupLoss.get_output_sub(
-                img, node, self.weighted_average)
+                outputs, node, self.weighted_average)
             selector = [1 for c in range(node.num_classes)]
             if not any(selector):
                 continue
@@ -280,7 +285,8 @@ class SingleInference(HardEmbeddedDecisionRules):
         n_samples = 1
         predicted = self.single_traversal(
             [], wnid_to_pred_selector, n_samples)
-        wandb.log({"examples": [wandb.Image(img.cpu().numpy(), caption=str(predicted))]})
+        wandb.log({"examples": [wandb.Image(torch.squeeze(img).cpu().numpy().transpose((1, 2, 0)),
+                                            caption=str(predicted))]})
         cls = self.wnid_to_class.get(predicted[-1], None)
         pred = -1 if cls is None else self.classes.index(cls)
         print("class: ", pred)
@@ -288,7 +294,7 @@ class SingleInference(HardEmbeddedDecisionRules):
 
 
 class HardFullTreePrior(Noop):
-    accepts_path_graph_analysis = True
+    accepts_path_graph = True
     accepts_path_wnids = True
     accepts_json_save_path = True
     accepts_weighted_average = True
@@ -423,3 +429,88 @@ class HardFullTreePrior(Noop):
             if self.use_wandb:
                 wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
             print("Json saved to %s" % cls_path)
+
+class HardEmbeddedDecisionRulesMultiPath(HardEmbeddedDecisionRules):
+    """Evaluation is hard."""
+
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
+            weighted_average=False, use_wandb=False, run_name="HardEmbeddedDecisionRulesMultiPath"):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
+                         run_name=run_name)
+
+    def update_batch(self, outputs, predicted, targets):
+        super().update_batch(outputs, predicted, targets)
+
+        targets_ints = [int(target) for target in targets.cpu().long()]
+        wnid_to_pred_selector = {}
+        for node in self.nodes:
+            selector, outputs_sub, targets_sub = HardTreeSupLossMultiPath.inference(
+                node, outputs, targets, self.weighted_average)
+            if not any(selector):
+                continue
+            _, preds_sub = torch.max(outputs_sub, dim=1)
+            preds_sub = list(map(int, preds_sub.cpu()))
+            wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
+
+        n_samples = outputs.size(0)
+        predicted = self.traverse_tree(
+            predicted, wnid_to_pred_selector, n_samples).to(targets.device)
+        self.total += n_samples
+        self.correct += (predicted == targets).sum().item()
+        for i in range(len(predicted)):
+            self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
+            self.class_totals[self.classes[targets[i]]] += 1
+        accuracy = round(self.correct / float(self.total), 4) * 100
+        return f'NBDT-Hard: {accuracy}%'
+
+class SingleRISE(SingleInference):
+    """Generate RISE saliency map for a single image ."""
+
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, net,
+            weighted_average=False, use_wandb=False, run_name="SingleRISE"):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb=use_wandb,
+                         run_name=run_name)
+        H,L,W=trainset[0][0].shape
+        print("INPUT SIZE: ", (L,W))
+        self.net = net
+        self.rise = RISE(net, input_size=(L,W))
+
+    def inf(self, img, outputs):
+        print("=====> starting RISE", img.shape)
+        wnid_to_pred_selector = {}
+        wnid_to_rise = {}
+        examples, sals = [], []
+        for node in self.nodes:
+            outputs_sub = HardTreeSupLoss.get_output_sub(
+                outputs, node, self.weighted_average)
+            outputs_sub = nn.functional.softmax(outputs_sub, dim=1)
+            selector = [1 for c in range(node.num_classes)]
+            if not any(selector):
+                continue
+            _, preds_sub = torch.max(outputs_sub, dim=1)
+            preds_sub = list(map(int, preds_sub.cpu()))
+            wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
+            print("Done with node", node.wnid)
+            rise_saliency = self.rise.explain_instance(img, node, self.weighted_average)
+            wnid_to_rise[node.wnid] = rise_saliency
+        n_samples = 1
+        predicted = self.single_traversal(
+            [], wnid_to_pred_selector, n_samples)
+        print("WANDB ", self.use_wandb)
+        if self.use_wandb:
+            wandb.log({"examples": [wandb.Image(torch.squeeze(img).cpu().numpy().transpose((1, 2, 0)),
+                                                caption=str(predicted))]})
+        cls = self.wnid_to_class.get(predicted[-1], None)
+        pred = -1 if cls is None else self.classes.index(cls)
+        print("class: ", pred)
+        print("inference: ", predicted)
+
+        for wnid, rise_output in wnid_to_rise.items():
+            overlay = get_cam(torch.squeeze(img), rise_output.cpu().detach().numpy())
+            sals.append(wandb.Image(overlay, caption=f"RISE (wnid={wnid})"))
+            if not os.path.exists("./out/RISE/"):
+                os.makedirs("./out/RISE/")
+            if not cv2.imwrite(f"./out/RISE/RISE_{wnid}.jpg", overlay):
+                print("ERROR writing image to file")
+        if self.use_wandb:
+            wandb.log({"rise examples": sals})
