@@ -65,7 +65,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 experiment_name = args.experiment_name if args.experiment_name else '{}-{}-{}'.format(args.model, args.dataset, args.analysis)
 if args.wandb:
-    wandb.init(project=experiment_name, name='main', entity='lisadunlap')
+    wandb.init(project=experiment_name, name='main')
     wandb.config.update({
         k: v for k, v in vars(args).items() if (isinstance(v, str) or isinstance(v, int) or isinstance(v, float))
     })
@@ -104,7 +104,7 @@ print("image size: ", img.shape)
 # Model
 print('==> Building model..')
 model = getattr(models, args.model)
-model_kwargs = {'num_classes': 10}
+model_kwargs = {'num_classes': len(testset.classes)}
 
 if args.pretrained:
     try:
@@ -155,6 +155,4 @@ else:
 
 # run inference
 outputs = net(img.to(device))
-print("outputs shape: ", outputs.shape)
-
 analyzer.inf(img.to(device), outputs)

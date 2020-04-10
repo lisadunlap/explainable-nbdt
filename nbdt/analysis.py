@@ -23,14 +23,12 @@ from saliency.RISE.utils import get_cam
 from PIL import Image
 import cv2
 
-
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
     'SingleInference', 'HardFullTreePrior', 'HardEmbeddedDecisionRulesMultiPath', 'SingleRISE')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
         'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path',
         'net')
-
 
 def add_arguments(parser):
     parser.add_argument('--json-save-path', default=None, type=str,
@@ -39,6 +37,8 @@ def add_arguments(parser):
                     help='Directory to save jsons under for full tree analysis')
     parser.add_argument('--path-graph-analysis', default=None, type=str,
                     help='path for graph for analysis')
+    parser.add_argument('--track-nodes', default=None, type=str, nargs='*',
+                    help='node wnids to track')
 
 class Noop:
 
@@ -423,45 +423,64 @@ class HardFullTreePrior(Noop):
             cls_path = path + cls + '.json'
             with open(cls_path, 'w') as f:
                 json.dump(json_data, f)
-            root=next(get_roots(G))
-            tree = build_tree(G, root)
-            generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
-            if self.use_wandb:
-                wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
             print("Json saved to %s" % cls_path)
 
-class HardEmbeddedDecisionRulesMultiPath(HardEmbeddedDecisionRules):
-    """Evaluation is hard."""
 
-    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
-            weighted_average=False, use_wandb=False, run_name="HardEmbeddedDecisionRulesMultiPath"):
-        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
-                         run_name=run_name)
+class HardTrackNodes(HardFullTreePrior):
+    accepts_path_graph_analysis = True
+    accepts_path_wnids = True
+    accepts_weighted_average = True
+    accepts_track_nodes = True
 
-    def update_batch(self, outputs, predicted, targets):
-        super().update_batch(outputs, predicted, targets)
+    """Evaluates model on a decision tree prior. Evaluation is deterministic."""
+    """Evaluates on entire tree, tracks all paths. Additionally, tracks which images
+        go to each node by retaining their index numbers. Stores this into a json.
+        Note: only works if dataloader for evaluation is NOT shuffled."""
+    def __init__(self, trainset, testset, path_graph_analysis, path_wnids, json_save_path, track_nodes,
+                 csv_save_path='./out/cifar100.csv', weighted_average=False):
+        super().__init__(trainset, testset, path_graph_analysis, path_wnids, json_save_path,
+                         csv_save_path, weighted_average)
+        self.track_nodes = {wnid:[] for wnid in track_nodes}
 
-        targets_ints = [int(target) for target in targets.cpu().long()]
-        wnid_to_pred_selector = {}
-        for node in self.nodes:
-            selector, outputs_sub, targets_sub = HardTreeSupLossMultiPath.inference(
-                node, outputs, targets, self.weighted_average)
-            if not any(selector):
-                continue
-            _, preds_sub = torch.max(outputs_sub, dim=1)
-            preds_sub = list(map(int, preds_sub.cpu()))
-            wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
+    # return leaf node wnids corresponding to each output
+    def traverse_tree(self, wnid_to_pred_selector, nsamples, targets):
+        leaf_wnids = []
+        wnid_root = get_root(self.G)
+        node_root = self.wnid_to_node[wnid_root]
+        target_classes = targets.numpy()
+        for index in range(nsamples):
+            wnid, node = wnid_root, node_root
+            while node is not None:
+                pred_sub = wnid_to_pred_selector[node.wnid]
+                index_child = pred_sub[index]
+                wnid = node.children[index_child]
+                if wnid in self.track_nodes:
+                    self.track_nodes[wnid].append(self.total + index)
+                node = self.wnid_to_node.get(wnid, None)
+                try:
+                    self.node_counts[self.class_to_wnid[self.classes[target_classes[index]]]][wnid] += 1
+                except:
+                    self.node_counts[self.classes[target_classes[index]]][wnid] += 1
+            leaf_wnids.append(wnid)
+        return leaf_wnids
 
-        n_samples = outputs.size(0)
-        predicted = self.traverse_tree(
-            predicted, wnid_to_pred_selector, n_samples).to(targets.device)
-        self.total += n_samples
-        self.correct += (predicted == targets).sum().item()
-        for i in range(len(predicted)):
-            self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
-            self.class_totals[self.classes[targets[i]]] += 1
-        accuracy = round(self.correct / float(self.total), 4) * 100
-        return f'NBDT-Hard: {accuracy}%'
+    def end_test(self, epoch):
+        self.write_to_json(self.json_save_path)
+
+    def write_to_json(self, path):
+        # create separate graph for each node
+        if not os.path.exists(os.path.dirname(path)):
+            os.makedirs(os.path.dirname(path))
+
+        with open(path, 'w') as f:
+            json.dump(self.track_nodes, f)
+        print("Json saved to %s" % path)
+        root=next(get_roots(G))
+        tree = build_tree(G, root)
+        generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
+        if self.use_wandb:
+            wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
+        print("Json saved to %s" % cls_path)
 
 class SingleRISE(SingleInference):
     """Generate RISE saliency map for a single image ."""

@@ -158,4 +158,8 @@ class CausalMetric():
             coords = salient_order[:, self.step * i:self.step * (i + 1)]
             start.cpu().numpy().reshape(n_samples, 3, HW)[r, :, coords] = finish.cpu().numpy().reshape(n_samples, 3, HW)[r, :, coords]
         print('AUC: {}'.format(auc(scores.mean(1))))
+<<<<<<< HEAD
         return scores
+=======
+        return scores
+>>>>>>> f1eb2f12846f01608511385c7773f1866dd26afd
