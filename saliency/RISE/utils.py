@@ -4,10 +4,7 @@ import torch
 from torch.utils.data.sampler import Sampler
 from torchvision import transforms, datasets
 from PIL import Image
-<<<<<<< HEAD
 import cv2
-=======
->>>>>>> f1eb2f12846f01608511385c7773f1866dd26afd
 
 
 # Dummy class to store arguments
