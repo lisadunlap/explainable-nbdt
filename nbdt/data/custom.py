@@ -1,8 +1,10 @@
 import torchvision.datasets as datasets
 import torch
 import numpy as np
+import os
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
+import torchsample
 from collections import defaultdict
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
@@ -31,8 +33,7 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
                    'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM',
                    'MiniPlaces',)
-keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes',
-        'photos_path', 'labels_path')
+keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes')
 
 
 def add_arguments(parser):
@@ -41,8 +42,6 @@ def add_arguments(parser):
     parser.add_argument('--exclude-labels', nargs='*', type=int)
     parser.add_argument('--include-classes', nargs='*', type=str)
     parser.add_argument('--combine-classes', nargs='+', type=str, action='append')
-    parser.add_argument('--photos-path', default='', type=str)
-    parser.add_argument('--labels-path', default='', type=str)
 
 
 
@@ -608,21 +607,36 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
 
 
 class MiniPlaces(Dataset): 
-    def __init__(self, photos_path, labels_path, transform):
-        # load in the data 
+    def __init__(self, root, transform, train=True, **kwargs):
+        # load in the data, we ignore test case, only train/val
+        root = os.path.join(root, 'miniplaces')
+        labels_fname = 'train.txt' if train else 'val.txt'
+        photos_path = os.path.join(root, 'images')
+        labels_path = os.path.join(root, labels_fname)
+        categories_path = os.path.join(root, 'categories.txt')
+
         self.photos_path = photos_path
         self.labels_path = labels_path
+        self.categories_path = categories_path
         self.transform = transform
         self.load_size = 224
         self.images = []
         self.labels = []
+        self.classes = []
 
-        # read the text file
+        # read the file
+        # assuming that file hierarchy is {train/val}/{first letter}/{class}/{fname}.xml
         with open(self.labels_path, 'r') as f: 
             for line in f:
                 path, label = line.strip().split(" ")
                 self.images.append(path)
                 self.labels.append(label)
+
+        with open(self.categories_path, 'r') as f:
+            for line in f:
+                cls, _ = line.strip().split(" ")
+                cls = cls.split('/')[-1]
+                self.classes.append(cls)
 
         self.images = np.array(self.images, np.object)
         self.labels = np.array(self.labels, np.int64)
@@ -655,7 +669,7 @@ class MiniPlaces(Dataset):
 
     @staticmethod
     def transform_test():
-        transform_test = ransforms.Compose([
+        transform_test = transforms.Compose([
             transforms.Scale(256),
             transforms.CenterCrop(224),
             transforms.ToTensor(),

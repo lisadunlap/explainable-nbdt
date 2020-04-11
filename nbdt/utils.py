@@ -58,7 +58,7 @@ DATASET_TO_PATHS = {
     'Imagenet1000': {
         'path_graph': DEFAULT_IMAGENET1000_TREE,
         'path_wnids': DEFAULT_IMAGENET1000_WNIDS
-    }
+    },
     'MiniPlaces': {
         'path_graph': DEFAULT_MINIPLACES_TREE,
         'path_wnids': DEFAULT_MINIPLACES_WNID
