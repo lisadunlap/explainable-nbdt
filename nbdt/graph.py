@@ -126,7 +126,16 @@ def wnid_to_synset(wnid):
     try:
         return wn.synset_from_pos_and_offset(wnid[0], offset)
     except:
-        return FakeSynset(wnid)
+        try:
+            return non_wn_synset_from_wnid(wnid)
+        except:
+            return FakeSynset(wnid)
+
+
+def non_wn_synset_from_wnid(wnid):
+    with open('./data/fake_wnid_to_class.json', 'r') as f:
+        wnid_to_class = json.load(f)
+    return FakeSynset(wnid, wnid_to_class[wnid])
 
 
 def synset_to_name(synset):
@@ -369,9 +378,9 @@ def get_centers(checkpoint):
 
 
 class FakeSynset:
-
-    def __init__(self, wnid):
+    def __init__(self, wnid, name='(generated)'):
         self.wnid = wnid
+        self.name_ = name
 
         assert isinstance(wnid, str)
 
@@ -386,7 +395,7 @@ class FakeSynset:
         return 'f'
 
     def name(self):
-        return '(generated)'
+        return self.name_
 
 
 def augment_graph(G, extra, allow_imaginary=False, seed=0, max_retries=10000):

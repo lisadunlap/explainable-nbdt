@@ -5,6 +5,7 @@ import os
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 import torchsample
+import json
 from collections import defaultdict
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
@@ -607,13 +608,13 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
 
 
 class MiniPlaces(Dataset): 
-    def __init__(self, root, transform, train=True, **kwargs):
+    def __init__(self, root, transform, train=True, download=False, **kwargs):
         # load in the data, we ignore test case, only train/val
-        root = os.path.join(root, 'miniplaces')
+        self.root = os.path.join(root, 'miniplaces')
         labels_fname = 'train.txt' if train else 'val.txt'
-        photos_path = os.path.join(root, 'images')
-        labels_path = os.path.join(root, labels_fname)
-        categories_path = os.path.join(root, 'categories.txt')
+        photos_path = os.path.join(self.root, 'images')
+        labels_path = os.path.join(self.root, labels_fname)
+        categories_path = os.path.join(self.root, 'categories.txt')
 
         self.photos_path = photos_path
         self.labels_path = labels_path
@@ -623,6 +624,10 @@ class MiniPlaces(Dataset):
         self.images = []
         self.labels = []
         self.classes = []
+
+        if download:
+            # TODO check if file already exists, otherwise download
+            pass
 
         # read the file
         # assuming that file hierarchy is {train/val}/{first letter}/{class}/{fname}.xml
@@ -642,6 +647,13 @@ class MiniPlaces(Dataset):
         self.labels = np.array(self.labels, np.int64)
         print("# images found at path '%s': %d" % (self.labels_path, self.images.shape[0]))
 
+        wnid_to_class = self.setup_custom_wnids(root)
+        with open(os.path.join(root, 'fake_wnid_to_class.json'), 'w') as f:
+            print(wnid_to_class)
+            print(os.path.join(root, 'fake_wnid_to_class.json'))
+            json.dump(wnid_to_class, f)
+
+
     def __len__(self): 
         return len(self.images)
 
@@ -651,6 +663,20 @@ class MiniPlaces(Dataset):
         # label is the index of the correct category
         label = self.labels[idx]
         return (image, label)
+
+    def setup_custom_wnids(self, root):
+        wnid_to_class = {}
+        with open(os.path.join(self.root, 'wnids.txt'), 'w') as f:
+            # use all 9s to avoid conflict with wn
+            for i in range(100):
+                wnid = 'f%s' % str(i).zfill(8).replace('0', '9')
+                wnid_to_class[wnid] = self.classes[i]
+                f.write(wnid + '\n')
+        return wnid_to_class
+
+
+        
+
 
     @staticmethod
     def transform_train():
