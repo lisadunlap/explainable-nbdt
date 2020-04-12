@@ -86,8 +86,8 @@ testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, t
 
 assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=0)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
 Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
 
@@ -148,11 +148,19 @@ def adjust_learning_rate(epoch, lr):
     else:
       return lr/100
 
+def exp_lr_scheduler(epoch, init_lr=0.0001, lr_decay_epoch=30, weight=0.1):
+    lr = init_lr * (weight ** (epoch // lr_decay_epoch))
+    return lr
+
 # Training
 def train(epoch, analyzer):
     analyzer.start_train(epoch)
-    lr = adjust_learning_rate(epoch, args.lr)
-    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+    if args.dataset in ("MiniPlaces",):
+        lr = exp_lr_scheduler(epoch)
+        optimizer = optim.RMSprop(net.parameters(), lr=lr)
+    else:
+        lr = adjust_learning_rate(epoch, args.lr)
+        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
 
     print('\nEpoch: %d' % epoch)
     net.train()

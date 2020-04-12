@@ -640,7 +640,6 @@ class MiniPlaces(Dataset):
         with open(self.categories_path, 'r') as f:
             for line in f:
                 cls, _ = line.strip().split(" ")
-                cls = cls.split('/')[-1]
                 self.classes.append(cls)
 
         self.images = np.array(self.images, np.object)
@@ -652,7 +651,6 @@ class MiniPlaces(Dataset):
             print(wnid_to_class)
             print(os.path.join(root, 'fake_wnid_to_class.json'))
             json.dump(wnid_to_class, f)
-
 
     def __len__(self): 
         return len(self.images)
