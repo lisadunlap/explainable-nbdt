@@ -14,7 +14,7 @@ import torch.nn.init as init
 from pathlib import Path
 
 # tree-generation consntants
-METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted')
+METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node')
 DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000', 'TinyImagenet200CombineClasses')
 DATASET_TO_FOLDER_NAME = {
     'CIFAR10': 'CIFAR10',
@@ -258,3 +258,20 @@ def generate_fname(dataset, model, path_graph, wnid=None, name='',
         if weighted_average:
             fname += '-weighted'
     return fname
+
+def word2vec_model(net, trainset, added=False):
+    from gensim.models import Word2Vec
+
+    fc_weights = []
+    print(type(net.module.linear.weight))
+    model = Word2Vec.load("./data/word2veccorpus")
+    for i, cls in enumerate(trainset.classes):
+        word_vec = model.wv[cls]
+        fc_weights = np.append(fc_weights, np.array(word_vec, dtype=float))
+    print("FC weight shape: ",np.array(fc_weights).shape)
+    fc_weights = fc_weights.reshape((len(trainset.classes),512))
+    print("new FC weight shape: ",np.array(fc_weights).shape)
+    net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
+    net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
+    net.module.linear.requires_grad = False
+    return net
