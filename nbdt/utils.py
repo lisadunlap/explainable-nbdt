@@ -9,6 +9,7 @@ import time
 import math
 import numpy as np
 
+import torch
 import torch.nn as nn
 import torch.nn.init as init
 from pathlib import Path
@@ -273,5 +274,6 @@ def word2vec_model(net, trainset, added=False):
     print("new FC weight shape: ",np.array(fc_weights).shape)
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
-    net.module.linear.requires_grad = False
+    net.module.linear.weight.requires_grad = False
+    net.module.linear.bias.requires_grad = False
     return net

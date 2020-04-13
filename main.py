@@ -170,7 +170,7 @@ populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
     keys=loss.keys, globals=globals())
 criterion = class_criterion(**loss_kwargs)
 
-optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
 def adjust_learning_rate(epoch, lr):
     if epoch <= 150 / 350. * args.epochs:  # 32k iterations
@@ -184,7 +184,7 @@ def adjust_learning_rate(epoch, lr):
 def train(epoch, analyzer):
     analyzer.start_train(epoch)
     lr = adjust_learning_rate(epoch, args.lr)
-    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=lr, momentum=0.9, weight_decay=5e-4)
 
     print('\nEpoch: %d' % epoch)
     net.train()
@@ -281,7 +281,7 @@ if args.eval:
     if not args.resume and not args.pretrained:
         Colors.red(' * Warning: Model is not loaded from checkpoint. '
         'Use --resume or --pretrained (if supported)')
-
+    net.eval()
     analyzer.start_epoch(0)
     test(0, analyzer, checkpoint=False)
     exit()
