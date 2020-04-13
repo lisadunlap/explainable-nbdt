@@ -255,3 +255,20 @@ python modify_tree.py --json-path=./data/CIFAR10/graph-induced-wrn28_10_cifar10.
 ## Weights and Biases Logging
 
 To log results on weights and biases (which is strongly recommended), you must first create an account and run your command (either training, inference, or analysis), with the `--wandb` flag. The first time you run it you will be prompted to enter your api key.
+
+
+## Zero Shot CIFAR10
+
+To run zero shot experiments on cifar10 with the word2vec apprach or the image feature approach:
+1. Train model on seen classes (add in `--word2vec` if using word2vec apprach)
+```
+python main.py --dataset=CIFAR10IncludeClasses --include-classes airplane automobile bird deer dog frog horse ship --model=ResNet10 --checkpoint-fname ckpt-CIFAR10-w2v-zsl-cat-truck --word2vec
+```
+2. Add in zero shot fc layers 
+```
+python add_zeroshot_vec.py --dataset=CIFAR10 --model=ResNet10 --new-classes cat truck --path-resume=./checkpoint/ckpt-CIFAR10-w2v-zsl-cat-truck.pth  --resume --checkpoint-fname ckpt-CIFAR10-zeroshot-cat-truck-full --word2vec
+```
+3. Evaluate
+```
+python main.py --dataset=CIFAR10 --model=ResNet10 --path-resume ./checkpoint/ckpt-CIFAR10-zeroshot-cat-truck-full.pth  --resume --eval --analysis ConfusionMatrix
+```
