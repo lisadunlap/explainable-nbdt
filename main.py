@@ -15,7 +15,7 @@ import wandb
 
 import models
 from nbdt.utils import (
-    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors
+    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors, word2vec_model
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
@@ -50,6 +50,7 @@ parser.add_argument('--input-size', type=int,
                     'input-size + 32.')
 parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
+parser.add_argument('--word2vec', action='store_true')
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -161,6 +162,8 @@ elif args.path_resume:
         Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
 
+if args.word2vec:
+    net = word2vec_model(net, trainset)
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',

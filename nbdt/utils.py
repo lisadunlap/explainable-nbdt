@@ -258,3 +258,20 @@ def generate_fname(dataset, model, path_graph, wnid=None, name='',
         if weighted_average:
             fname += '-weighted'
     return fname
+
+def word2vec_model(net, trainset, added=False):
+    from gensim.models import Word2Vec
+
+    fc_weights = []
+    print(type(net.module.linear.weight))
+    model = Word2Vec.load("./data/word2veccorpus")
+    for i, cls in enumerate(trainset.classes):
+        word_vec = model.wv[cls]
+        fc_weights = np.append(fc_weights, np.array(word_vec, dtype=float))
+    print("FC weight shape: ",np.array(fc_weights).shape)
+    fc_weights = fc_weights.reshape((len(trainset.classes),512))
+    print("new FC weight shape: ",np.array(fc_weights).shape)
+    net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
+    net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
+    net.module.linear.requires_grad = False
+    return net
