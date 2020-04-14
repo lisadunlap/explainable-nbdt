@@ -218,6 +218,8 @@ def train(epoch, analyzer):
 def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     analyzer.start_test(epoch)
 
+    if ood_loader:
+        testloader = ood_loader
     global best_acc
     net.eval()
     test_loss = 0
@@ -278,22 +280,14 @@ if args.ood_dataset:
     populate_kwargs(args, ood_dataset_kwargs, dataset, name=f'Dataset {args.ood_dataset}',
         keys=data.custom.keys, globals=globals())
     ood_dataset_kwargs['include_classes'] = args.ood_classes # manual override
-
-    ood_train = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
-    ood_test = dataset(**ood_dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
-    assert len(ood_train.classes) == len(args.ood_classes), (len(ood_train.classes), len(args.ood_classes))
-    Colors.cyan(f'Loaded OOD dataset with {len(args.ood_classes)} classes: {args.ood_classes}')
-    
-    # overwrite dataloader for analyzer
-    trainloader = torch.utils.data.DataLoader(ood_train, batch_size=args.batch_size, shuffle=True, num_workers=2)
-    testloader = torch.utils.data.DataLoader(ood_test, batch_size=args.batch_size, shuffle=True, num_workers=2)
-
+    ood_set = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
+    ood_loader = torch.utils.data.DataLoader(ood_set, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
 analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
-analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb, track_nodes=args.track_nodes)
+analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
 
 
 if args.eval:
@@ -302,7 +296,6 @@ if args.eval:
         'Use --resume or --pretrained (if supported)')
     net.eval()
     analyzer.start_epoch(0)
-
     if args.ood_dataset:
         test(0, analyzer, checkpoint=False, ood_loader=ood_loader)
     else:
