@@ -292,10 +292,11 @@ if args.eval:
         ood_dataset_kwargs = {}
         populate_kwargs(args, ood_dataset_kwargs, dataset, name=f'Dataset {args.ood_dataset}',
             keys=data.custom.keys, globals=globals())
-        ood_dataset_kwargs['include_classes'] = args.ood_classes
+        ood_dataset_kwargs['include_classes'] = args.ood_classes # manual override
 
         ood_set = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_test)
-        assert ood_set.classes == len(args.ood_classes), (ood_set.classes, len(args.ood_classes))
+        assert len(ood_set.classes) == len(args.ood_classes), (len(ood_set.classes), len(args.ood_classes))
+        Colors.cyan(f'Loaded OOD dataset with {len(args.ood_classes)} classes: {args.ood_classes}')
         ood_loader = torch.utils.data.DataLoader(ood_set, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
         test(0, analyzer, checkpoint=False, ood_loader=ood_loader)

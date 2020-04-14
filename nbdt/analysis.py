@@ -432,7 +432,7 @@ class HardTrackNodes(HardFullTreePrior):
         go to each node by retaining their index numbers. Stores this into a json.
         Note: only works if dataloader for evaluation is NOT shuffled."""
     def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, track_nodes,
-        json_save_path='out/hard_track_nodes_analysis', csv_save_path='./out/cifar100.csv', weighted_average=False,
+        json_save_path='./out/hard_track_nodes_analysis/', csv_save_path='./out/hard_track_nodes_analysis.csv', weighted_average=False,
         use_wandb=False, run_name="HardTrackNodes"):
         super().__init__(trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path,
                          csv_save_path, weighted_average, use_wandb, run_name)
