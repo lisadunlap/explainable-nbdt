@@ -468,11 +468,14 @@ class HardTrackNodes(HardFullTreePrior):
         if not os.path.exists(os.path.dirname(path)):
             os.makedirs(os.path.dirname(path))
 
-        with open(path, 'w') as f:
-            json.dump(self.track_nodes, f)
-            root=next(get_roots(G))
-            tree = build_tree(G, root)
-            generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
-            if self.use_wandb:
-                wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
-            print("Json saved to %s" % cls_path)
+        for cls in self.classes:
+            cls_path = path + cls + '.json'
+            with open(path, 'w') as f:
+                json.dump(self.track_nodes, f)
+                root=next(get_roots(G))
+                tree = build_tree(G, root)
+                generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
+                if self.use_wandb:
+                    wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
+                print("Json saved to %s" % cls_path)
+
