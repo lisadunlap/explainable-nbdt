@@ -22,7 +22,7 @@ import pandas as pd
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference', 'HardFullTreePrior', 'HardEmbeddedDecisionRulesMultiPath')
+    'SingleInference', 'HardFullTreePrior', 'HardEmbeddedDecisionRulesMultiPath', 'HardTrackNodes')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
         'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path')
 
@@ -431,10 +431,11 @@ class HardTrackNodes(HardFullTreePrior):
     """Evaluates on entire tree, tracks all paths. Additionally, tracks which images
         go to each node by retaining their index numbers. Stores this into a json.
         Note: only works if dataloader for evaluation is NOT shuffled."""
-    def __init__(self, trainset, testset, path_graph_analysis, path_wnids, json_save_path, track_nodes,
-                 csv_save_path='./out/cifar100.csv', weighted_average=False):
+    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, track_nodes,
+        json_save_path='out/hard_track_nodes_analysis', csv_save_path='./out/cifar100.csv', weighted_average=False,
+        use_wandb=False, run_name="HardTrackNodes"):
         super().__init__(trainset, testset, path_graph_analysis, path_wnids, json_save_path,
-                         csv_save_path, weighted_average)
+                         csv_save_path, weighted_average, experiment_name, use_wandb, run_name)
         self.track_nodes = {wnid:[] for wnid in track_nodes}
 
     # return leaf node wnids corresponding to each output

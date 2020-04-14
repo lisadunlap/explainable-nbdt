@@ -51,6 +51,7 @@ parser.add_argument('--input-size', type=int,
 parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
 parser.add_argument('--word2vec', action='store_true')
+parser.add_argument("--track_nodes", nargs="*", type=str, help="nodes to keep track of")
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -274,7 +275,7 @@ analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
-analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
+analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb, track_nodes=args.track_nodes)
 
 
 if args.eval:
