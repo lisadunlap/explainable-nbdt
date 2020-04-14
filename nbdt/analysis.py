@@ -472,10 +472,15 @@ class HardTrackNodes(HardFullTreePrior):
             cls_path = path + cls + '.json'
             with open(cls_path, 'w') as f:
                 json.dump(self.track_nodes, f)
+
+                G = nx.DiGraph(self.G)
+                for node in self.G.nodes():
+                    G.nodes[node]['weight'] = self.node_counts[cls][node] / self.class_counts[cls]
+                G.nodes[get_root(self.G)]['weight'] = 1
+
                 root=next(get_roots(G))
                 tree = build_tree(G, root)
                 generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
                 if self.use_wandb:
                     wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
                 print("Json saved to %s" % cls_path)
-
