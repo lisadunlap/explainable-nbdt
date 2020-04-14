@@ -272,6 +272,22 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
 
     analyzer.end_test(epoch)
 
+if args.ood_dataset:
+    ood_dataset = getattr(data, args.ood_dataset)
+    ood_dataset_kwargs = {}
+    populate_kwargs(args, ood_dataset_kwargs, dataset, name=f'Dataset {args.ood_dataset}',
+        keys=data.custom.keys, globals=globals())
+    ood_dataset_kwargs['include_classes'] = args.ood_classes # manual override
+
+    ood_train = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
+    ood_test = dataset(**ood_dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
+    assert len(ood_train.classes) == len(args.ood_classes), (len(ood_train.classes), len(args.ood_classes))
+    Colors.cyan(f'Loaded OOD dataset with {len(args.ood_classes)} classes: {args.ood_classes}')
+    
+    # overwrite dataloader for analyzer
+    trainloader = torch.utils.data.DataLoader(ood_train, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    testloader = torch.utils.data.DataLoader(ood_test, batch_size=args.batch_size, shuffle=True, num_workers=2)
+
 
 analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
@@ -288,17 +304,6 @@ if args.eval:
     analyzer.start_epoch(0)
 
     if args.ood_dataset:
-        ood_dataset = getattr(data, args.ood_dataset)
-        ood_dataset_kwargs = {}
-        populate_kwargs(args, ood_dataset_kwargs, dataset, name=f'Dataset {args.ood_dataset}',
-            keys=data.custom.keys, globals=globals())
-        ood_dataset_kwargs['include_classes'] = args.ood_classes # manual override
-
-        ood_set = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_test)
-        assert len(ood_set.classes) == len(args.ood_classes), (len(ood_set.classes), len(args.ood_classes))
-        Colors.cyan(f'Loaded OOD dataset with {len(args.ood_classes)} classes: {args.ood_classes}')
-        ood_loader = torch.utils.data.DataLoader(ood_set, batch_size=args.batch_size, shuffle=True, num_workers=2)
-
         test(0, analyzer, checkpoint=False, ood_loader=ood_loader)
     else:
         test(0, analyzer, checkpoint=False)
