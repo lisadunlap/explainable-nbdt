@@ -434,8 +434,8 @@ class HardTrackNodes(HardFullTreePrior):
     def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, track_nodes,
         json_save_path='out/hard_track_nodes_analysis', csv_save_path='./out/cifar100.csv', weighted_average=False,
         use_wandb=False, run_name="HardTrackNodes"):
-        super().__init__(trainset, testset, path_graph_analysis, path_wnids, json_save_path,
-                         csv_save_path, weighted_average, experiment_name, use_wandb, run_name)
+        super().__init__(trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path,
+                         csv_save_path, weighted_average, use_wandb, run_name)
         self.track_nodes = {wnid:[] for wnid in track_nodes}
 
     # return leaf node wnids corresponding to each output
