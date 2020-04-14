@@ -30,6 +30,8 @@ parser.add_argument('--dataset', default='CIFAR10', choices=datasets)
 parser.add_argument('--model', default='ResNet18', choices=list(models.get_model_choices()))
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
+parser.add_argument('--ood-dataset', choices=datasets, help='dataset to use for out of distribution images')
+parser.add_argument('--ood-classes', nargs='*', type=str, help='classes to include for ood-dataset')
 
 # extra general options for main script
 parser.add_argument('--checkpoint-fname', default='',
@@ -213,7 +215,7 @@ def train(epoch, analyzer):
 
     analyzer.end_train(epoch)
 
-def test(epoch, analyzer, checkpoint=True):
+def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     analyzer.start_test(epoch)
 
     global best_acc
@@ -284,7 +286,21 @@ if args.eval:
         'Use --resume or --pretrained (if supported)')
     net.eval()
     analyzer.start_epoch(0)
-    test(0, analyzer, checkpoint=False)
+
+    if args.ood_dataset:
+        ood_dataset = getattr(data, args.ood_dataset)
+        ood_dataset_kwargs = {}
+        populate_kwargs(args, ood_dataset_kwargs, dataset, name=f'Dataset {args.ood_dataset}',
+            keys=data.custom.keys, globals=globals())
+        ood_dataset_kwargs['include_classes'] = args.ood_classes
+
+        ood_set = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_test)
+        assert ood_set.classes == len(args.ood_classes), (ood_set.classes, len(args.ood_classes))
+        ood_loader = torch.utils.data.DataLoader(ood_set, batch_size=args.batch_size, shuffle=True, num_workers=2)
+
+        test(0, analyzer, checkpoint=False, ood_loader=ood_loader)
+    else:
+        test(0, analyzer, checkpoint=False)
     exit()
 
 for epoch in range(start_epoch, args.epochs):
