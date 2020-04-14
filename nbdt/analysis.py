@@ -470,7 +470,7 @@ class HardTrackNodes(HardFullTreePrior):
 
         for cls in self.classes:
             cls_path = path + cls + '.json'
-            with open(path, 'w') as f:
+            with open(cls_path, 'w') as f:
                 json.dump(self.track_nodes, f)
                 root=next(get_roots(G))
                 tree = build_tree(G, root)
