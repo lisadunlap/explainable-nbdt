@@ -55,6 +55,8 @@ def get_parser():
     parser.add_argument("--children", nargs='*', type=str,
                         help="extra paths to add, this should be a list of \
                         children corresponding to the parent nodes")
+    parser.add_argument('--ignore-labels', nargs='*', type=int,
+                        help='labels to ignore when clustering, will be added at the end')
     return parser
 
 
@@ -316,14 +318,21 @@ def read_graph(path):
 
 
 def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
-        branching_factor=2):
-    centers = get_centers(checkpoint)
+        branching_factor=2, ignore_labels=[]):
+    centers_all = get_centers(checkpoint)
+    wnids_all = wnids
+    use_labels = [label for label in range(centers_all.size(0)) if label not in ignore_labels]
+    wnids = [wnid for label, wnid in enumerate(wnids) if label not in ignore_labels]
+    centers = centers_all[use_labels,:]
     n_classes = centers.size(0)
+
 
     G = nx.DiGraph()
 
     # add leaves
-    for wnid in wnids:
+    center_to_wnid = {}
+    for i, wnid in enumerate(wnids):
+        center_to_wnid[i] = wnid
         G.add_node(wnid)
         set_node_label(G, wnid_to_synset(wnid))
 
@@ -347,6 +356,29 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
             else:
                 child_wnid = index_to_wnid[child - n_classes]
             G.add_edge(parent.wnid, child_wnid)
+
+    # add originally ignored labels
+    
+    for label in ignore_labels:
+        wnid_new = wnids_all[label]
+        G.add_node(wnid_new)
+        set_node_label(G, wnid_to_synset(wnid_new))
+
+        # find center in tree that most closely matches
+        label_vec = centers_all[label]
+        _, closest = torch.max(torch.matmul(centers,label_vec), dim=0)
+        closest = int(closest.cpu().numpy())
+        
+        wnid = center_to_wnid[closest]
+
+        parent = FakeSynset.create_from_offset(len(G.nodes))
+        G.add_node(parent.wnid)
+
+        in_node = list(G.in_edges(wnid))[0][0]
+        G.remove_edge(in_node, wnid)
+        G.add_edge(in_node, parent.wnid)
+        G.add_edge(parent.wnid, wnid)
+        G.add_edge(parent.wnid, wnid_new)
 
     assert len(list(get_roots(G))) == 1, list(get_roots(G))
     return G

@@ -41,7 +41,8 @@ def main():
             checkpoint=args.induced_checkpoint,
             linkage=args.induced_linkage,
             affinity=args.induced_affinity,
-            branching_factor=args.branching_factor)
+            branching_factor=args.branching_factor,
+            ignore_labels=args.ignore_labels)
     else:
         raise NotImplementedError(f'Method "{args.method}" not yet handled.')
     print_graph_stats(G, 'matched', args)

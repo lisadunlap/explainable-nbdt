@@ -156,6 +156,16 @@ class Node:
                 self.new_to_old_classes.items(), key=lambda t: t[0])
         ]
 
+    def prune_ignore_labels(self, ignore_labels):
+        """ remove labels from ignore_labels that are direct children of this node """
+        ignore_labels_pruned = []
+        for cls in ignore_labels:
+            child_idx = self.old_to_new_classes[cls]
+            if len(child_idx) == 0 or self.children[child_idx[0]] in self.wnids:
+                continue
+            ignore_labels_pruned.append(cls)
+        return ignore_labels_pruned
+
     @property
     def class_counts(self):
         """Number of old classes in each new class"""
@@ -545,7 +555,7 @@ class ExcludeLabelsDataset(IncludeLabelsDataset):
 
     def __init__(self, dataset, exclude_labels=(0,)):
         k = len(dataset.classes)
-        include_labels = set(range(k)) - set(exclude_labels)
+        include_labels = list(set(range(k)) - set(exclude_labels))
         super().__init__(
             dataset=dataset,
             include_labels=include_labels)
