@@ -22,9 +22,9 @@ import pandas as pd
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference', 'HardFullTreePrior', 'HardEmbeddedDecisionRulesMultiPath', 'HardTrackNodes')
+    'SingleInference', 'HardFullTreePrior', 'HardEmbeddedDecisionRulesMultiPath', 'HardTrackNodes', 'HardFullTreeOODPrior')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
-        'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path')
+        'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path', 'ood_path_wnids')
 
 def add_arguments(parser):
     parser.add_argument('--json-save-path', default=None, type=str,
@@ -490,14 +490,28 @@ class HardFullTreeOODPrior(HardFullTreePrior):
     accepts_path_graph_analysis = True
     accepts_path_wnids = True
     accepts_weighted_average = True
+    accepts_oodset = True
+    accepts_ood_path_wnids = True
 
-    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, oodset,
+    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, oodset, ood_path_wnids,
         json_save_path='./out/hard_full_ood_analysis/', csv_save_path='./out/hard_full_ood_analysis.csv', weighted_average=False,
         use_wandb=False, run_name="HardFullTreeOODPrior"):
-
+        super().__init__(trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path,
+            csv_save_path, weighted_average, use_wandb, run_name)
+        self.nodes = Node.get_nodes(path_graph_analysis, path_wnids, trainset.classes)
         self.ood_classes = oodset.classes
-        self.node_counts = {cls:{node.wnid:0 for node in self.nodes} for cls in self.ood_classes}
+        self.ood_wnids = get_wnids(ood_path_wnids)
+        self.wnid_to_class.update({wnid: cls for wnid, cls in zip(self.ood_wnids, self.ood_classes)})
+        self.class_to_wnid = {self.wnid_to_class[wnid]:wnid for wnid in self.wnid_to_class.keys()}
+        self.node_counts = {}
+        for cls in self.ood_classes:
+            curr_counts = {w: 0 for w in self.wnid_to_class.keys()}
+            curr_counts.update({n.wnid: 0 for n in self.nodes})
+            self.node_counts[cls] = curr_counts
+        self.leaf_counts = {cls:{node:0 for node in get_leaves(self.G)} for cls in self.ood_classes}
         self.class_counts = {cls:0 for cls in self.ood_classes}  # count how many samples weve seen for each class
+        
+        
     def update_batch(self, outputs, predicted, targets):
         wnid_to_pred_selector = {}
         n_samples = outputs.size(0)
@@ -515,6 +529,26 @@ class HardFullTreeOODPrior(HardFullTreePrior):
         self.total += len(paths)
         accuracy = round(self.correct / self.total, 4) * 100
         return f'TreePrior: {accuracy}%'
+
+    def traverse_tree(self, wnid_to_pred_selector, nsamples, targets):
+        leaf_wnids = []
+        wnid_root = get_root(self.G)
+        node_root = self.wnid_to_node[wnid_root]
+        target_classes = targets.numpy()
+        for index in range(nsamples):
+            wnid, node = wnid_root, node_root
+            while node is not None:
+                pred_sub = wnid_to_pred_selector[node.wnid]
+                index_child = pred_sub[index]
+                wnid = node.children[index_child]
+                node = self.wnid_to_node.get(wnid, None)
+                try:
+                    self.node_counts[self.ood_classes[target_classes[index]]][wnid] += 1
+                except:
+                    self.node_counts[self.ood_classes[target_classes[index]]][wnid] += 1
+            leaf_wnids.append(wnid)
+        return leaf_wnids
+
     def write_to_json(self, path):
         # create separate graph for each node
         if not os.path.exists(path):
@@ -539,3 +573,22 @@ class HardFullTreeOODPrior(HardFullTreePrior):
             with open(cls_path, 'w') as f:
                 json.dump(json_data, f)
             print("Json saved to %s" % cls_path)
+
+    def write_to_csv(self, path):
+        columns = {node:[] for node in get_leaves(self.G)}
+        for cls in self.ood_classes:
+            for node in get_leaves(self.G):
+                if node in self.leaf_counts[cls]:
+                    columns[node].append(self.leaf_counts[cls][node])
+                else:
+                    columns[node].append(0)
+        new_columns = {}
+        for node in get_leaves(self.G):
+            new_columns["%s %s" % (synset_to_name(wnid_to_synset(node)), node)] = columns[node]
+        try:
+            int(self.classes[1:])
+            index = [self.wnid_to_name[cls] for cls in self.classes]
+        except:
+            index = [cls for cls in self.classes]
+        df = pd.DataFrame(data=new_columns, index=index)
+        df.to_csv(path)

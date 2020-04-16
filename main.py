@@ -32,7 +32,7 @@ parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--ood-dataset', choices=datasets, help='dataset to use for out of distribution images')
 parser.add_argument('--ood-classes', nargs='*', type=str, help='classes to include for ood-dataset')
-
+parser.add_argument('--ood-path-wnids', type=str, help='path to wnids.txt for ood-dataset')
 # extra general options for main script
 parser.add_argument('--checkpoint-fname', default='',
                     help='Overrides checkpoint name generation')
@@ -277,7 +277,7 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
 if args.ood_dataset:
     ood_dataset = getattr(data, args.ood_dataset)
     ood_dataset_kwargs = {}
-    populate_kwargs(args, ood_dataset_kwargs, dataset, name=f'Dataset {args.ood_dataset}',
+    populate_kwargs(args, ood_dataset_kwargs, ood_dataset, name=f'Dataset {args.ood_dataset}',
         keys=data.custom.keys, globals=globals())
     ood_dataset_kwargs['include_classes'] = args.ood_classes # manual override
     ood_set = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
@@ -287,6 +287,8 @@ analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
+if args.ood_dataset:
+    analyzer_kwargs['oodset'] = ood_set
 analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
 
 
