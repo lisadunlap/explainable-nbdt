@@ -17,7 +17,9 @@ from pathlib import Path
 
 # tree-generation consntants
 METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node')
-DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000', 'TinyImagenet200CombineClasses', 'MiniPlaces')
+DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000',
+            'TinyImagenet200CombineClasses', 'MiniPlaces', 'AnimalsWithAttributes2')
+
 DATASET_TO_FOLDER_NAME = {
     'CIFAR10': 'CIFAR10',
     'CIFAR100': 'CIFAR100',
@@ -25,7 +27,8 @@ DATASET_TO_FOLDER_NAME = {
     'TinyImagenet200IncludeClasses': 'tiny-imagenet-200-custom',
     'Imagenet1000' : 'imagenet-1000',
     'TinyImagenet200CombineClasses': 'tiny-imagenet-200-custom-combined',
-    'MiniPlaces': 'miniplaces'
+    'MiniPlaces': 'miniplaces',
+    'AnimalsWithAttributes2': 'awa2'
 }
 
 # main script constants
@@ -41,6 +44,8 @@ DEFAULT_IMAGENET1000_TREE = './data/imagenet-1000/graph-wordnet-single.json'
 DEFAULT_IMAGENET1000_WNIDS = './data/imagenet-1000/wnids.txt'
 DEFAULT_MINIPLACES_TREE = '/data/miniplaces/graph-default.json'
 DEFAULT_MINIPLACES_WNID = './data/miniplaces/wnids.txt'
+DEFAULT_AWA2_TREE = '/data/awa2/graph-default.json'
+DEFAULT_AWA2_WNID = './data/awa2/wnids.txt'
 
 
 DATASET_TO_PATHS = {
@@ -63,6 +68,10 @@ DATASET_TO_PATHS = {
     'MiniPlaces': {
         'path_graph': DEFAULT_MINIPLACES_TREE,
         'path_wnids': DEFAULT_MINIPLACES_WNID
+    },
+    'AnimalsWithAttributes2': {
+        'path_graph': DEFAULT_AWA2_TREE,
+        'path_wnids': DEFAULT_AWA2_WNID
     }
 }
 
