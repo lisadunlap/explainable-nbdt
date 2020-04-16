@@ -484,3 +484,58 @@ class HardTrackNodes(HardFullTreePrior):
                 if self.use_wandb:
                     wandb.log({cls+"-path": wandb.Html(open(cls_path.replace('.json', '')+'-tree.html'), inject=False)})
                 print("Json saved to %s" % cls_path)
+
+
+class HardFullTreeOODPrior(HardFullTreePrior): 
+    accepts_path_graph_analysis = True
+    accepts_path_wnids = True
+    accepts_weighted_average = True
+
+    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, oodset,
+        json_save_path='./out/hard_full_ood_analysis/', csv_save_path='./out/hard_full_ood_analysis.csv', weighted_average=False,
+        use_wandb=False, run_name="HardFullTreeOODPrior"):
+
+        self.ood_classes = oodset.classes
+        self.node_counts = {cls:{node.wnid:0 for node in self.nodes} for cls in self.ood_classes}
+        self.class_counts = {cls:0 for cls in self.ood_classes}  # count how many samples weve seen for each class
+    def update_batch(self, outputs, predicted, targets):
+        wnid_to_pred_selector = {}
+        n_samples = outputs.size(0)
+        for node in self.nodes:
+            outputs_sub = HardTreeSupLoss.get_output_sub(outputs, node, self.weighted_average)
+            _, preds_sub = torch.max(outputs_sub, dim=1)
+            preds_sub = list(map(int, preds_sub.cpu()))
+            wnid_to_pred_selector[node.wnid] = preds_sub
+        paths = self.traverse_tree(wnid_to_pred_selector, n_samples, targets)
+        for cls, leaf in zip(targets.numpy(), paths):
+            self.leaf_counts[self.ood_classes[cls]][leaf] += 1
+            self.class_counts[self.ood_classes[cls]] += 1
+        predicted = [self.classes.index(self.wnid_to_class[wnid]) for wnid in paths]
+        self.correct += np.sum((predicted == targets.numpy()))
+        self.total += len(paths)
+        accuracy = round(self.correct / self.total, 4) * 100
+        return f'TreePrior: {accuracy}%'
+    def write_to_json(self, path):
+        # create separate graph for each node
+        if not os.path.exists(path):
+            os.makedirs(path)
+        for cls in self.ood_classes:
+            try:
+                int(cls[1:])
+                cls = self.class_to_wnid[cls]
+            except:
+                pass
+            G = nx.DiGraph(self.G)
+            for node in self.G.nodes():
+                G.nodes[node]['weight'] = self.node_counts[cls][node] / self.class_counts[cls]
+            G.nodes[get_root(self.G)]['weight'] = 1
+            json_data = node_link_data(G)
+            try:
+                int(cls[1:])
+                cls = self.wnid_to_name[cls]
+            except:
+                pass
+            cls_path = path + cls + '.json'
+            with open(cls_path, 'w') as f:
+                json.dump(json_data, f)
+            print("Json saved to %s" % cls_path)
