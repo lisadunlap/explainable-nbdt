@@ -496,13 +496,18 @@ class HardFullTreeOODPrior(HardFullTreePrior):
     def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, oodset, ood_path_wnids,
         json_save_path='./out/hard_full_ood_analysis/', csv_save_path='./out/hard_full_ood_analysis.csv', weighted_average=False,
         use_wandb=False, run_name="HardFullTreeOODPrior"):
-        super().__init__(trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path,
-            csv_save_path, weighted_average, use_wandb, run_name)
-        self.nodes = Node.get_nodes(path_graph_analysis, path_wnids, trainset.classes)
+        self.nodes = Node.get_nodes(path_graph_analysis, path_wnids, trainset.classes, ood_path_wnids)
+        self.G = self.nodes[0].G
+        self.wnid_to_node = {node.wnid: node for node in self.nodes}
+        self.wnids = get_wnids(path_wnids, ood_path_wnids)
+        self.classes = trainset.classes
+        self.wnid_to_class = {wnid: cls for wnid, cls in zip(self.wnids, self.classes)}
+
         self.ood_classes = oodset.classes
         self.ood_wnids = get_wnids(ood_path_wnids)
         self.wnid_to_class.update({wnid: cls for wnid, cls in zip(self.ood_wnids, self.ood_classes)})
         self.class_to_wnid = {self.wnid_to_class[wnid]:wnid for wnid in self.wnid_to_class.keys()}
+
         self.node_counts = {}
         for cls in self.ood_classes:
             curr_counts = {w: 0 for w in self.wnid_to_class.keys()}
@@ -510,8 +515,13 @@ class HardFullTreeOODPrior(HardFullTreePrior):
             self.node_counts[cls] = curr_counts
         self.leaf_counts = {cls:{node:0 for node in get_leaves(self.G)} for cls in self.ood_classes}
         self.class_counts = {cls:0 for cls in self.ood_classes}  # count how many samples weve seen for each class
-        
-        
+
+        self.weighted_average = weighted_average
+        self.csv_save_path = csv_save_path
+        self.json_save_path = json_save_path
+        if not os.path.exists(self.json_save_path):
+            os.mkdir(self.json_save_path)
+
     def update_batch(self, outputs, predicted, targets):
         wnid_to_pred_selector = {}
         n_samples = outputs.size(0)
@@ -524,11 +534,6 @@ class HardFullTreeOODPrior(HardFullTreePrior):
         for cls, leaf in zip(targets.numpy(), paths):
             self.leaf_counts[self.ood_classes[cls]][leaf] += 1
             self.class_counts[self.ood_classes[cls]] += 1
-        #print("wnid_to_class:", self.wnid_to_class)
-        #print("self.classes:", self.classes)
-        #predicted = [self.classes.index(self.wnid_to_class[wnid]) for wnid in paths]
-        #self.correct += np.sum((predicted == targets.numpy()))
-        #self.total += len(paths)
         accuracy = -1 #round(self.correct / self.total, 4) * 100
         return f'TreePrior: {accuracy}%'
 
