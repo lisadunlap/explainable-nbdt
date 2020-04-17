@@ -217,7 +217,7 @@ def train(epoch, analyzer):
 
 def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     analyzer.start_test(epoch)
-
+    global testloader
     if ood_loader:
         testloader = ood_loader
     global best_acc

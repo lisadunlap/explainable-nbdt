@@ -524,10 +524,12 @@ class HardFullTreeOODPrior(HardFullTreePrior):
         for cls, leaf in zip(targets.numpy(), paths):
             self.leaf_counts[self.ood_classes[cls]][leaf] += 1
             self.class_counts[self.ood_classes[cls]] += 1
-        predicted = [self.classes.index(self.wnid_to_class[wnid]) for wnid in paths]
-        self.correct += np.sum((predicted == targets.numpy()))
-        self.total += len(paths)
-        accuracy = round(self.correct / self.total, 4) * 100
+        #print("wnid_to_class:", self.wnid_to_class)
+        #print("self.classes:", self.classes)
+        #predicted = [self.classes.index(self.wnid_to_class[wnid]) for wnid in paths]
+        #self.correct += np.sum((predicted == targets.numpy()))
+        #self.total += len(paths)
+        accuracy = -1 #round(self.correct / self.total, 4) * 100
         return f'TreePrior: {accuracy}%'
 
     def traverse_tree(self, wnid_to_pred_selector, nsamples, targets):
@@ -586,9 +588,9 @@ class HardFullTreeOODPrior(HardFullTreePrior):
         for node in get_leaves(self.G):
             new_columns["%s %s" % (synset_to_name(wnid_to_synset(node)), node)] = columns[node]
         try:
-            int(self.classes[1:])
-            index = [self.wnid_to_name[cls] for cls in self.classes]
+            int(self.ood_classes[1:])
+            index = [self.wnid_to_name[cls] for cls in self.ood_classes]
         except:
-            index = [cls for cls in self.classes]
+            index = [cls for cls in self.ood_classes]
         df = pd.DataFrame(data=new_columns, index=index)
         df.to_csv(path)

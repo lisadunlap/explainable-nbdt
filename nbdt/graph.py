@@ -55,6 +55,7 @@ def get_parser():
     parser.add_argument("--children", nargs='*', type=str,
                         help="extra paths to add, this should be a list of \
                         children corresponding to the parent nodes")
+    parser.add_argument("--include-classes", nargs='*', type=str, help='classes to include')
     return parser
 
 
