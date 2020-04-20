@@ -206,6 +206,7 @@ class HardEmbeddedDecisionRules(Noop):
         super().end_test(epoch)
         accuracy = round(self.correct / self.total * 100., 2)
         print(f'NBDT-Hard Accuracy: {accuracy}%, {self.correct}/{self.total}')
+        print([(self.class_accuracies[k]/self.class_totals[k])*100 for k in self.class_accuracies.keys()])
         if self.use_wandb:
             wandb.run.summary["NBDT hard accuracy"] = accuracy
             data = [[(self.class_accuracies[k]/self.class_totals[k])*100 for k in self.class_accuracies.keys()]]
@@ -418,6 +419,12 @@ class HardFullTreePrior(Noop):
             cls_path = path + cls + '.json'
             with open(cls_path, 'w') as f:
                 json.dump(json_data, f)
+            print("Json saved to %s" % cls_path)
+            root = next(get_roots(G))
+            tree = build_tree(G, root)
+            generate_vis(os.getcwd() + '/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
+            if self.use_wandb:
+                wandb.log({cls + "-path": wandb.Html(open(cls_path.replace('.json', '') + '-tree.html'), inject=False)})
             print("Json saved to %s" % cls_path)
 
 
