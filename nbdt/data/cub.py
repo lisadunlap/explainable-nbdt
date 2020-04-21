@@ -6,10 +6,10 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 from PIL import Image
 
-__all__ = names = ('CUB2011', 'CUB2011Train', 'CUB2011Test')
+__all__ = names = ('CUB2011', 'CUB2011Train', 'CUB2011Val')
 
 
-class Cub2011(Dataset):
+class CUB2011(Dataset):
     base_folder = 'CUB_200_2011/images'
     url = 'http://www.vision.caltech.edu/visipedia-data/CUB-200-2011/CUB_200_2011.tgz'
     filename = 'CUB_200_2011.tgz'
@@ -105,12 +105,12 @@ class Cub2011(Dataset):
 
         return img, target
 
-class Cub2011Train(Cub2011):
+class CUB2011Train(CUB2011):
 
     def __init__(self, root='./data', *args, **kwargs):
         super().__init__(root, train=True)
 
-class Cub2011Val(Cub2011):
+class CUB2011Val(CUB2011):
 
     def __init__(self, root='./data', *args, **kwargs):
         super().__init__(root, train=False)
