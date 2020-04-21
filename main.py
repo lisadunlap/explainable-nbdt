@@ -15,7 +15,7 @@ import wandb
 import models
 from nbdt.utils import (
     progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors,
-    get_transform_from_name,
+    get_transform_from_name, word2vec_model
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
@@ -50,6 +50,7 @@ parser.add_argument('--input-size', type=int,
                     'input-size + 32.')
 parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
+parser.add_argument('--word2vec', action='store_true')
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -132,13 +133,27 @@ if args.resume:
             net.load_state_dict(checkpoint)
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
+elif args.path_resume:
+    # Load checkpoint.
+    print('==> Resuming from checkpoint..')
+    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
+    if not os.path.exists(resume_path):
+        print('==> No checkpoint found. Skipping...')
+    else:
+        checkpoint = torch.load(resume_path)
+        net.load_state_dict(checkpoint['net'])
+        Colors.cyan(f'==> Checkpoint found at {resume_path}')
+
+
+if args.word2vec:
+    net = word2vec_model(net, trainset)
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
     keys=loss.keys, globals=globals())
 criterion = class_criterion(**loss_kwargs)
 
-optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
 def adjust_learning_rate(epoch, lr):
     if epoch <= 150 / 350. * args.epochs:  # 32k iterations
@@ -257,7 +272,7 @@ if args.eval:
     if not args.resume and not args.pretrained:
         Colors.red(' * Warning: Model is not loaded from checkpoint. '
         'Use --resume or --pretrained (if supported)')
-
+    net.eval()
     analyzer.start_epoch(0)
     test(0, analyzer, checkpoint=False)
     exit()

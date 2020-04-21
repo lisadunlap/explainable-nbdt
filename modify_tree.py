@@ -1,7 +1,7 @@
 from nbdt.utils import DATASETS, METHODS, DATASET_TO_FOLDER_NAME, Colors
 from nbdt.graph import get_parser, get_wnids_from_dataset, read_graph, \
     get_leaves, generate_fname, get_directory, get_graph_path_from_args, \
-    get_roots, add_paths, write_graph, augment_graph, condense_leaves
+    get_roots, add_paths, write_graph, augment_graph, condense_leaves, delete_paths
 from pathlib import Path
 import argparse
 import os
@@ -18,15 +18,6 @@ def main():
     print('==> Reading from {}'.format(path))
 
     G = read_graph(path)
-
-    ############# DEBUG ############
-    node = G.node['n04251144']
-    print(node)
-    node['label'] = "test"
-    print(node)
-    print([i for i in G.predecessors('n04251144')])
-    print([i for i in G.successors('n04251144')])
-    exit(0)
 
     if args.method == 'clustered':
         G = condense_leaves(G)
