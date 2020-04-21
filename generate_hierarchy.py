@@ -30,7 +30,7 @@ def main():
     parser = get_parser()
 
     args = parser.parse_args()
-    wnids = get_wnids_from_dataset(args.dataset)
+    wnids = get_wnids_from_dataset(args.dataset, path_wnids_ood=args.ood_path_wnids)
 
     if args.method == 'wordnet':
         G = build_minimal_wordnet_graph(wnids, args.single_path)
