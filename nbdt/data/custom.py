@@ -696,4 +696,5 @@ class CIFAR10FewShotLabels(FewShotLabelsDataset):
                  fewshot_nsamples=-1, **kwargs):
         super().__init__(
             dataset=datasets.CIFAR10(*args, root=root, **kwargs),
-            fewshot_labels, fewshot_gt_nsamples, fewshot_nsamples, **kwargs)
+            fewshot_labels=fewshot_labels, fewshot_gt_nsamples=fewshot_gt_nsamples, 
+            fewshot_nsamples=fewshot_nsamples, **kwargs)
