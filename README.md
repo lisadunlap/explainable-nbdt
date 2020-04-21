@@ -272,3 +272,32 @@ python add_zeroshot_vec.py --dataset=CIFAR10 --model=ResNet10 --new-classes cat 
 ```
 python main.py --dataset=CIFAR10 --model=ResNet10 --path-resume ./checkpoint/ckpt-CIFAR10-zeroshot-cat-truck-full.pth  --resume --eval --analysis ConfusionMatrix
 ```
+
+## Integrating a secondary OOD Dataset
+Currently, this process is slightly annoying because you will have to create a new `wnids.txt` file for each set of OOD classes you want to test (e.g. by using the `HardFullTreePrior` class with the OOD parameters). For example, the following code trains a model on a dataset with images from `CIFAR10 - {cat, train}`, then feeds in images of `cat` and `train` as the OOD dataset.
+*Note:* When listing out classes in parameters below, if you run into any errors, try alphabetizing the class names you pass in (this issue seems to come up every now and then).
+```
+# Train model
+python main.py \
+  --dataset=CIFAR10IncludeClasses --include-classes "airplane" "automobile" "bird" "deer" "dog" "frog" "horse" "ship" # list all classes in training set \
+  --model=ResNet10 --checkpoint-fname=... 
+
+# Generate hierarchy
+python generate_hierarchy.py --method=induced --induced-checkpoint=... \
+  --dataset=CIFAR10IncludeClasses --include-classes "airplane" "automobile" "bird" "deer" "dog" "frog" "horse" "ship"
+
+# Analysis on OOD dataset
+python main.py \
+  --dataset=CIFAR10IncludeClasses --include-classes "airplane" "automobile" "bird" "deer" "dog" "frog" "horse" "ship" # list all classes in training set \
+  --model=ResNet10 --path-resume=... --eval --resume --wandb \
+  --path-graph=... --path-graph-analysis=... --path-wnids=... # use generated files above \
+  --analysis=HardFullTreePrior --ood-dataset=CIFAR10IncludeClasses --ood-classes "cat" "truck" # include OOD classes here
+  --ood-path-wnids=... # path to wnids.txt for the OOD classes listed in line above \
+```
+
+Here, the `wnids.txt` file for the OOD file, which should contain `wnid`s for `cat` and `truck`, looks like:
+```
+n02121620
+n04490091
+```
+The format is exactly the same as the `wnids.txt` for the original dataset, except you only keep wnids for the remaining OOD classes. No need to change the `wnids.txt` for the original dataset.
