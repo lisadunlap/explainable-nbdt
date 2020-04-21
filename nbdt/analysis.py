@@ -469,7 +469,6 @@ class HardTrackNodes(HardFullTreePrior):
 
         with open(path, 'w') as f:
             json.dump(self.track_nodes, f)
-        print("Json saved to %s" % path)
             root=next(get_roots(G))
             tree = build_tree(G, root)
             generate_vis(os.getcwd()+'/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)

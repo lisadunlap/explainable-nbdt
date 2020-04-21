@@ -17,8 +17,7 @@ from . import imagenet
 import torch.nn as nn
 import random
 
-
-__all__ = names = ('CIFAR10IncludeLabels',
+__all__ = names = ('CIFAR10IncludeLabels', 'CIFAR10FewShotLabels',
                    'CIFAR100IncludeLabels', 'TinyImagenet200IncludeLabels',
                    'Imagenet1000IncludeLabels','CIFAR10IncludeClasses',
                    'CIFAR100IncludeClasses', 'TinyImagenet200IncludeClasses',
@@ -29,7 +28,8 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'Imagenet1000ResampleLabels', 'CIFAR10CombineClasses',
                    'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
                    'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM')
-keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes')
+keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes',
+        'fewshot_labels', 'fewshot_gt_nsamples', 'fewshot_nsamples')
 
 
 def add_arguments(parser):
@@ -39,9 +39,15 @@ def add_arguments(parser):
     parser.add_argument('--include-classes', nargs='*', type=str)
     parser.add_argument('--combine-classes', nargs='+', type=str, action='append')
 
+    parser.add_argument('--fewshot-labels', nargs='*', type=str)
+    parser.add_argument('--fewshot-gt-nsamples', type=int, default=5,
+                        help='How many ground truth samples of each few shot class to use')
+    parser.add_argument('--fewshot-nsamples', type=int, default=-1,
+                        help='How many total samples of each few shot class to feed in')
+
 
 def set_default_values(args):
-    paths = DATASET_TO_PATHS[args.dataset.replace('IncludeLabels', '').replace('IncludeClasses', '').replace('ExcludeLabels', '').replace('ResampleLabels', '').replace('CombineLabels', '').replace('CombineClasses', '')]
+    paths = DATASET_TO_PATHS[args.dataset.replace('IncludeLabels', '').replace('IncludeClasses', '').replace('ExcludeLabels', '').replace('ResampleLabels', '').replace('CombineLabels', '').replace('CombineClasses', '').replace('FewShotLabels', '')]
     if not args.path_graph:
         args.path_graph = paths['path_graph']
     if not args.path_wnids:
@@ -577,6 +583,7 @@ class Imagenet1000ExcludeLabels(ExcludeLabelsDataset):
             dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
             exclude_labels=exclude_labels)
 
+
 class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
     def __init__(self, root='./data',
                  *args, model, include_classes=('cat',), target_layer='layer4', cam_threshold=-1, **kwargs):
@@ -599,3 +606,93 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
         masked_img = curr_img[cam_mask > self.cam_threshold]
 
         return curr_img, masked_img
+
+class FewShotLabelsDataset(Dataset):
+    """
+    Dataset that limits the few shot labels to only a few samples, with custom resampling.
+
+    :fewshot_labels bool: 
+        indices representing the few shot classes
+    :fewshot_gt_nsamples int:
+        how many ground truth samples to use for the fewshot samples
+    :fewshot_nsamples int:
+        how many total samples to use for each fewshot class. If -1, use as many as 
+            the average number of samples per class.
+    """
+
+    accepts_fewshot_labels = True
+    accepts_fewshot_gt_nsamples = True
+    accepts_fewshot_nsamples = True
+
+    def __init__(self, dataset, fewshot_labels=[], fewshot_gt_nsamples=5, fewshot_nsamples=-1,
+                 seed=0, shuffle=True, train=True, **kwargs):
+        self.dataset = dataset
+        self.classes = dataset.classes
+        self.labels = list(range(len(self.classes)))
+        self.fewshot_labels = fewshot_labels
+        self.fewshot_gt_nsamples = fewshot_gt_nsamples
+        self.fewshot_nsamples = fewshot_nsamples
+        self.seed = seed
+
+        if train:
+            np.random.seed(self.seed)
+            self.fewshot_gt = self.build_fewshot_gt()
+            self.new_to_old = self.build_index_mapping()
+        else:
+            self.new_to_old = [i for i in range(len(self.dataset))]
+
+        if self.shuffle:
+            np.random.shuffle(self.new_to_old)
+
+    def build_fewshot_gt(self):
+        """Finds fewshot_gt_nsamples samples per fewshot label from the dataset. Returns dict containing
+        list of used sample indices per few shot label.
+        """
+        fewshot_class_gt = {label:[] for label in self.fewshot_labels}
+
+        for old, (_, label) in enumerate(self.dataset):
+            if label in self.fewshot_labels:
+                fewshot_class_gt.append(old)
+
+        return {label:np.random.choice(fewshot_class_gt[label], self.fewshot_gt_nsamples)
+                for label in self.fewshot_labels}
+
+    def build_index_mapping(self):
+        """Iterates over all samples in dataset.
+
+        Keeps all non-fewshot samples, and resamples from few-shot ground truth samples.
+        """
+
+        fewshot_class_nsamples = {label:0 for label in self.fewshot_labels}
+
+        new_to_old = []
+        for old, (_, label) in enumerate(self.dataset):
+            if label not in self.fewshot_labels:
+                new_to_old.append(old)
+            else:
+                if self.fewshot_nsamples == -1 or fewshot_class_nsamples[label] < self.fewshot_nsamples:
+                    new_to_old.append(np.random.choice(self.fewshot_gt[label]))
+
+        return new_to_old
+
+
+    def get_dataset(self):
+        return self.dataset
+
+    def __getitem__(self, index_new):
+        index_old = self.new_to_old[index_new]
+        sample, label_old = self.dataset[index_old]
+
+        label_new = label_old
+
+        return sample, label_new
+
+    def __len__(self):
+        return len(self.new_to_old)
+
+class CIFAR10FewShotLabels(FewShotLabelsDataset):
+
+    def __init__(self, *args, root='./data', **kwargs):
+        super().__init__(
+            dataset=datasets.CIFAR10(*args, root=root, **kwargs),
+            **kwargs)
