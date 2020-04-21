@@ -167,13 +167,21 @@ def get_root(G):
     assert len(roots) == 1, f'Multiple ({len(roots)}) found'
     return roots[0]
 
+def get_node_depth(G, node):
+    if not G.succ[node]:
+        return 1
+    return max([_get_depth(child) for child in G.succ[node]]) + 1
+
 
 def get_depth(G):
-    def _get_depth(node):
-        if not G.succ[node]:
-            return 1
-        return max([_get_depth(child) for child in G.succ[node]]) + 1
-    return max([_get_depth(root) for root in get_roots(G)])
+    return max([get_node_depth(G, root) for root in get_roots(G)])
+
+
+def get_path_nodes(G, source, target=None):
+    """ Returns list of nodes on the shortest path from source to target.
+        If target is None or ommitted, return a list of lists, with item i
+        being the list of nodes on the shortest path from source to node index i. """
+    return nx.shortest_path(G, source=source, target=target)
 
 
 def get_leaf_weights(G, node, weight=1):

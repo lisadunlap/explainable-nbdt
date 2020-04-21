@@ -1,4 +1,4 @@
-from nbdt.graph import get_root, get_roots, get_wnids, synset_to_name, wnid_to_synset, get_leaves
+from nbdt.graph import get_root, get_roots, get_wnids, synset_to_name, wnid_to_synset, get_leaves, get_path_nodes
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
     DEFAULT_CIFAR100_WNIDS, DEFAULT_TINYIMAGENET200_TREE,
@@ -299,7 +299,7 @@ class HardFullTreePrior(Noop):
 
     """Evaluates model on a decision tree prior. Evaluation is deterministic.
     Evaluates on entire tree, tracks all paths.
-    Use the --ood flag for pulling in out-of-distribution datasets.
+    Use the OOD parameters for pulling in out-of-distribution datasets; see README
      """
     def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path='./out/full_tree_analysis/',
                  csv_save_path='./out/cifar100.csv', weighted_average=False, use_wandb=False, run_name="HardFullTreePrior",
@@ -324,11 +324,13 @@ class HardFullTreePrior(Noop):
             self.wnid_to_class.update({wnid: cls for wnid, cls in zip(self.ood_wnids, self.ood_classes)})
             self.leaf_counts = {cls:{node:0 for node in get_leaves(self.G)} for cls in self.ood_classes}
             self.class_counts = {cls:0 for cls in self.ood_classes}
+            self.intermediate_counts = {} # keeps track of intermediate node counts
 
             for cls in self.ood_classes:
-                curr_counts = {w: 0 for w in self.wnid_to_class.keys()}
-                curr_counts.update({n.wnid: 0 for n in self.nodes})
-                self.node_counts[cls] = curr_counts
+                for counts_dict in (self.node_counts, self.intermediate_counts):
+                    curr_counts = {w: 0 for w in self.wnid_to_class.keys()}
+                    curr_counts.update({n.wnid: 0 for n in self.nodes})
+                    counts_dict[cls] = curr_counts
         else:
             self.ood_classes, self.ood_wnids = [], []
             self.leaf_counts = {cls:{node:0 for node in get_leaves(self.G)} for cls in self.classes}
@@ -383,7 +385,9 @@ class HardFullTreePrior(Noop):
                 wnid = node.children[index_child]
                 node = self.wnid_to_node.get(wnid, None)
                 if self.ood_classes:
-                    self.node_counts[self.ood_classes[target_classes[index]]][wnid] += 1
+                    curr_class = self.ood_classes[target_classes[index]]
+                    self.node_counts[curr_class][wnid] += 1
+                    self.intermediate_counts[curr_class][wnid] += 1
                 else:
                     try:
                         self.node_counts[self.class_to_wnid[self.classes[target_classes[index]]]][wnid] += 1
@@ -392,10 +396,30 @@ class HardFullTreePrior(Noop):
             leaf_wnids.append(wnid)
         return leaf_wnids
 
+    def calculate_depth_ratios(self):
+        """ Returns a dict {cls -> depth ratio} for each class in self.ood_classes.
+        Depth ratio for an unseen class c = # intermediate  decisions correct / # intermediate decisions to leaf c"""
+        depth_ratios = {}
+        for cls in self.ood_classes:
+            class_wnid = self.class_to_wnid[cls]
+            class_node = self.wnid_to_node[class_wnid]
+            curr_path_nodes = get_path_nodes(self.G, self.G.root, class_node)
+            curr_counts = self.intermediate_counts[cls]
+            correct, total = 0, 0
+            for i in range(len(curr_path_nodes)-1):
+                prev_node, next_node = curr_path_nodes[i], curr_path_nodes[i+1]
+                correct += curr_counts[next_node]
+                total += curr_counts[prev_node]
+            depth_ratio[cls] = correct / total
+        return depth_ratios
+
     def end_test(self, epoch):
         if self.csv_save_path is not None or self.use_wandb:
             self.write_to_csv(self.csv_save_path)
         self.write_to_json(self.json_save_path)
+        if self.ood_classes:
+            depth_ratios = self.calculate_depth_ratios()
+            print("===> depth ratios:", depth_ratios)
 
     def write_to_csv(self, path):
         columns = {node:[] for node in get_leaves(self.G)}
