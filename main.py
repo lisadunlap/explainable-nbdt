@@ -64,7 +64,7 @@ experiment_name = args.experiment_name if args.experiment_name \
     else '{}-{}-{}-{}'.format(args.model, args.dataset, args.loss, args.analysis)
 
 if args.wandb:
-    wandb.init(project=experiment_name, name='main')
+    wandb.init(project=experiment_name, name='main', entity='lisadunlap')
     wandb.config.update({
         k: v for k, v in vars(args).items() if (isinstance(v, str) or isinstance(v, int) or isinstance(v, float))
     })

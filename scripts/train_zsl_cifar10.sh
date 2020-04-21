@@ -1,0 +1,2 @@
+for class in airplane automobile bird cat deer dog frog horse ship truck
+  python main.py --dataset=CIFAR10ExcludeClasses --exclude-classes=${class} --model=ResNet10 --checkpoint-fname=ckpt-CIFAR10-exclude-&{class}

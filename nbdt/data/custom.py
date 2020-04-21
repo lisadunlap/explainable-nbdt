@@ -56,7 +56,8 @@ class Node:
     def __init__(self, wnid, classes,
             path_graph=DEFAULT_CIFAR10_TREE,
             path_wnids=DEFAULT_CIFAR10_WNIDS,
-            other_class=False):
+            other_class=False,
+            include_class_idxs=None):
         self.path_graph = path_graph
         self.path_wnids = path_wnids
 
