@@ -39,7 +39,7 @@ def add_arguments(parser):
     parser.add_argument('--include-classes', nargs='*', type=str)
     parser.add_argument('--combine-classes', nargs='+', type=str, action='append')
 
-    parser.add_argument('--fewshot-labels', nargs='*', type=str)
+    parser.add_argument('--fewshot-labels', nargs='*', type=int)
     parser.add_argument('--fewshot-gt-nsamples', type=int, default=5,
                         help='How many ground truth samples of each few shot class to use')
     parser.add_argument('--fewshot-nsamples', type=int, default=-1,
@@ -641,7 +641,7 @@ class FewShotLabelsDataset(Dataset):
         else:
             self.new_to_old = [i for i in range(len(self.dataset))]
 
-        if self.shuffle:
+        if shuffle:
             np.random.shuffle(self.new_to_old)
 
     def build_fewshot_gt(self):
@@ -652,7 +652,7 @@ class FewShotLabelsDataset(Dataset):
 
         for old, (_, label) in enumerate(self.dataset):
             if label in self.fewshot_labels:
-                fewshot_class_gt.append(old)
+                fewshot_class_gt[label].append(old)
 
         return {label:np.random.choice(fewshot_class_gt[label], self.fewshot_gt_nsamples)
                 for label in self.fewshot_labels}
