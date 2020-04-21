@@ -245,6 +245,7 @@ class ResampleLabelsDataset(Dataset):
     accepts_probability_labels = True
 
     def __init__(self, dataset, probability_labels=1, drop_classes=False, seed=0):
+        #drop_classes=False
         self.dataset = dataset
         self.classes = dataset.classes
         self.labels = list(range(len(self.classes)))
@@ -658,8 +659,6 @@ class MiniPlaces(Dataset):
 
         wnid_to_class = self.setup_custom_wnids(root)
         with open(os.path.join(root, 'fake_wnid_to_class.json'), 'w') as f:
-            print(wnid_to_class)
-            print(os.path.join(root, 'fake_wnid_to_class.json'))
             json.dump(wnid_to_class, f)
 
     def __len__(self): 
@@ -681,9 +680,6 @@ class MiniPlaces(Dataset):
                 wnid_to_class[wnid] = self.classes[i]
                 f.write(wnid + '\n')
         return wnid_to_class
-
-
-        
 
 
     @staticmethod

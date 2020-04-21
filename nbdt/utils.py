@@ -17,9 +17,10 @@ from pathlib import Path
 
 # tree-generation consntants
 METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node')
-DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000', 'TinyImagenet200CombineClasses', 'MiniPlaces')
+DATASETS = ('CIFAR10', 'CIFAR10ExcludeLabels', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000', 'TinyImagenet200CombineClasses', 'MiniPlaces')
 DATASET_TO_FOLDER_NAME = {
     'CIFAR10': 'CIFAR10',
+    'CIFAR10ExcludeLabels': 'CIFAR10-zeroshot',
     'CIFAR100': 'CIFAR100',
     'TinyImagenet200': 'tiny-imagenet-200',
     'TinyImagenet200IncludeClasses': 'tiny-imagenet-200-custom',

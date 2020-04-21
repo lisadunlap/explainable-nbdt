@@ -342,8 +342,10 @@ class HardFullTreePrior(Noop):
             outputs_sub = HardTreeSupLoss.get_output_sub(outputs, node, self.weighted_average, ignore_classes_pruned)
             _, preds_sub = torch.max(outputs_sub, dim=1)
             preds_sub = list(map(int, preds_sub.cpu()))
-            wnid_to_pred_selector[node.wnid] = preds_sub
 
+            outputs_sub = list(outputs_sub.cpu())
+
+            wnid_to_pred_selector[node.wnid] = preds_sub
         paths = self.traverse_tree(wnid_to_pred_selector, n_samples, targets)
         for cls, leaf in zip(targets.numpy(), paths):
             self.leaf_counts[self.classes[cls]][leaf] += 1
