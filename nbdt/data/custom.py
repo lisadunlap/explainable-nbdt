@@ -57,12 +57,13 @@ class Node:
             path_graph=DEFAULT_CIFAR10_TREE,
             path_wnids=DEFAULT_CIFAR10_WNIDS,
             other_class=False,
-            include_class_idxs=None):
+            path_wnids_ood=None):
         self.path_graph = path_graph
         self.path_wnids = path_wnids
+        self.path_wnids_ood = path_wnids_ood
 
         self.wnid = wnid
-        self.wnids = get_wnids(path_wnids)
+        self.wnids = get_wnids(path_wnids, path_wnids_ood)
         self.G = read_graph(path_graph)
 
         self.original_classes = classes
@@ -190,17 +191,17 @@ class Node:
         self._class_weights = class_weights
 
     @staticmethod
-    def get_wnid_to_node(path_graph, path_wnids, classes):
+    def get_wnid_to_node(path_graph, path_wnids, classes, path_wnids_ood=None):
         wnid_to_node = {}
         G = read_graph(path_graph)
         for wnid in get_non_leaves(G):
             wnid_to_node[wnid] = Node(
-                wnid, classes, path_graph=path_graph, path_wnids=path_wnids)
+                wnid, classes, path_graph=path_graph, path_wnids=path_wnids, path_wnids_ood=path_wnids_ood)
         return wnid_to_node
 
     @staticmethod
-    def get_nodes(path_graph, path_wnids, classes):
-        wnid_to_node = Node.get_wnid_to_node(path_graph, path_wnids, classes)
+    def get_nodes(path_graph, path_wnids, classes, path_wnids_ood=None):
+        wnid_to_node = Node.get_wnid_to_node(path_graph, path_wnids, classes, path_wnids_ood)
         wnids = sorted(wnid_to_node)
         nodes = [wnid_to_node[wnid] for wnid in wnids]
         return nodes

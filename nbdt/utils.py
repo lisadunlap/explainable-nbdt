@@ -263,9 +263,9 @@ def generate_fname(dataset, model, path_graph, wnid=None, name='',
     return fname
 
 def word2vec_model(net, trainset, added=False):
-    import gensim
+    """ Add in Word2Vec embeddings into last fc layer,
+    then freeze weights"""
     from gensim.models import Word2Vec
-    import gensim.downloader as api
 
     fc_weights = []
     try:
