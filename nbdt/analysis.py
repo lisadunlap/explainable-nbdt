@@ -318,17 +318,20 @@ class HardFullTreePrior(Noop):
         self.wnid_to_name = {wnid: synset_to_name(wnid_to_synset(wnid)) for wnid in self.wnids}
         self.leaf_counts = {cls:{node:0 for node in get_leaves(self.G)} for cls in self.classes}
         self.node_counts = {cls:{node.wnid:0 for node in self.nodes} for cls in self.classes}
-        self.class_counts = {cls:0 for cls in self.classes}  # count how many samples weve seen for each class
-        
-        for cls in self.classes:
-            self.node_counts[cls].update({wnid:0 for wnid in self.wnids})
+        self.class_counts = {} # count how many samples weve seen for each class
         
         if oodset:
             self.ood_classes = oodset.classes
             self.ood_wnids = get_wnids(ood_path_wnids)
             self.wnid_to_class.update({wnid: cls for wnid, cls in zip(self.ood_wnids, self.ood_classes)})
+            for cls in self.ood_classes:
+                curr_counts = {w: 0 for w in self.wnid_to_class.keys()}
+                curr_counts.update({n.wnid: 0 for n in self.nodes})
+                self.node_counts[cls] = curr_counts
         else:
             self.ood_classes, self.ood_wnids = [], []
+            for cls in self.classes:
+            self.node_counts[cls].update({wnid:0 for wnid in self.wnids})
 
         self.class_to_wnid = {self.wnid_to_class[wnid]:wnid for wnid in self.wnid_to_class.keys()}
         self.weighted_average = weighted_average
