@@ -111,7 +111,6 @@ def get_wnids(path_wnids, path_wnids_ood=None):
         with open(path_wnids_ood) as f:
             wnids_ood = set([wnid.strip() for wnid in f.readlines()])
             wnids = wnids - wnids_ood
-    print(sorted(list(wnids)))
     return sorted(list(wnids))
 
 
