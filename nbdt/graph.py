@@ -55,7 +55,7 @@ def get_parser():
     parser.add_argument("--children", nargs='*', type=str,
                         help="extra paths to add, this should be a list of \
                         children corresponding to the parent nodes")
-    parser.add_argument('--ignore-labels', nargs='*', type=int,
+    parser.add_argument('--ignore-labels', nargs='*', type=int, default=[],
                         help='labels to ignore when clustering, will be added at the end')
     parser.add_argument("--include-classes", nargs='*', type=str, help='classes to include')
     parser.add_argument('--ood-path-wnids', type=str, help='path to wnids.txt for ood-dataset')
@@ -331,7 +331,6 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
     wnids = [wnid for label, wnid in enumerate(wnids) if label not in ignore_labels]
     centers = centers_all[use_labels,:]
     n_classes = centers.size(0)
-
 
     G = nx.DiGraph()
 

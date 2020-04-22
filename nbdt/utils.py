@@ -23,6 +23,7 @@ DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeCla
 
 DATASET_TO_FOLDER_NAME = {
     'CIFAR10': 'CIFAR10',
+    'CIFAR10ExcludeLabels': 'CIFAR10-zeroshot',
     'CIFAR100': 'CIFAR100',
     'TinyImagenet200': 'tiny-imagenet-200',
     'TinyImagenet200IncludeClasses': 'tiny-imagenet-200-custom',

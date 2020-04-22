@@ -250,6 +250,7 @@ class ResampleLabelsDataset(Dataset):
     accepts_probability_labels = True
 
     def __init__(self, dataset, probability_labels=1, drop_classes=False, seed=0):
+        #drop_classes=False
         self.dataset = dataset
         self.classes = dataset.classes
         self.labels = list(range(len(self.classes)))
@@ -711,5 +712,4 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
         )
         print(curr_img, cam_mask)
         masked_img = curr_img[cam_mask > self.cam_threshold]
-
         return curr_img, masked_img

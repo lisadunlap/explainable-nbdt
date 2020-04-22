@@ -141,11 +141,12 @@ class HardTreeSupLoss(TreeSupLoss):
         ]
 
         cls_idxs = [node.new_to_old_classes[new_label] for new_label in range(node.num_classes)]
+
         for cls in ignore_classes:
             for cls_idx in cls_idxs:
                 if cls in cls_idx:
                     cls_idx.remove(cls)
-
+                    
         return torch.stack([
             (_outputs * weight).T
             [cls_idx].mean(dim=0)

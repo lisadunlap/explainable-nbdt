@@ -14,8 +14,8 @@ import wandb
 
 import models
 from nbdt.utils import (
-    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors,
-    get_transform_from_name, word2vec_model
+    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors, word2vec_model,
+    get_transform_from_name,
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
