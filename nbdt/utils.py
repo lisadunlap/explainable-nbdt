@@ -13,6 +13,7 @@ import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torchvision.transforms as transforms
+from gensim.models import Word2Vec
 
 from pathlib import Path
 
@@ -275,7 +276,7 @@ def generate_fname(dataset, model, path_graph, wnid=None, name='',
         include_classes=(), num_samples=0, max_leaves_supervised=-1,
         min_leaves_supervised=-1, tree_supervision_weight=0.5,
         weighted_average=False, fine_tune=False,
-        loss='CrossEntropyLoss', **kwargs):
+        loss='CrossEntropyLoss', word2vec=False, **kwargs):
     fname = 'ckpt'
     fname += '-' + dataset
     fname += '-' + model
@@ -305,32 +306,64 @@ def generate_fname(dataset, model, path_graph, wnid=None, name='',
             fname += f'-tsw{tree_supervision_weight}'
         if weighted_average:
             fname += '-weighted'
+    if word2vec:
+        fname += '-word2vec'
     return fname
 
-def word2vec_model(net, trainset, exclude_classes=()):
+def word2vec_model(net, trainset, exclude_classes=None, eval=False, pretrained=True, dimension=300):
     """ Sets FC layer weights to word2vec embeddings, freezing them unless
     exclude classes is given, in which case those specific rows are frozen in
     the backward call"""
-    from gensim.models import Word2Vec
 
     print('==> Adding in word2vec embeddings...')
+    if exclude_classes and eval:
+        test_word2vec(net, trainset, exclude_classes)
+        return
     fc_weights = []
-    try:
-        model = Word2Vec.load("./data/word2vec/wiki.en.word2vec.model")
-    except:
-        raise Exception("Word2Vec model not found")
+    if pretrained:
+        import gensim.downloader as api
+        model = api.load(f'glove-wiki-gigaword-{dimension}')
+        projection_matrix = np.random.rand(dimension, 512)
+    else:
+        try:
+            model = Word2Vec.load("./data/word2vec/word2veccorpus.model")
+        except:
+            raise Exception("Word2Vec model not found")
     for i, cls in enumerate(trainset.classes):
         word_vec = model.wv[cls]
-        fc_weights = np.append(fc_weights, np.array(word_vec, dtype=float))
+        if pretrained:
+            word_vec = np.asarray(word_vec).reshape(1, dimension)
+            word_vec = np.matmul(word_vec, projection_matrix)[0]
+            print(len(np.array(word_vec, dtype=float)))
+        fc_weights = np.append(fc_weights, np.array(word_vec/max(word_vec), dtype=float))
     fc_weights = fc_weights.reshape((len(trainset.classes),512))
     for i, cls in enumerate(trainset.classes):
-        assert all(fc_weights[i] == model.wv[cls])
+        if pretrained:
+            word_vec = np.matmul(model.wv[cls], projection_matrix)
+            assert all(fc_weights[i] == word_vec/max(word_vec))
+        else:
+            assert all(fc_weights[i] == model.wv[cls])
     Colors.cyan("All word2vec checks passed!")
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
     # freeze layer if exclude_classes in none (if not then need to set grad to zero in backward function)
-    if not exclude_classes or len(exclude_classes) == 0:
-        net.module.linear.weight.requires_grad = False
-        net.module.linear.bias.requires_grad = False
-        Colors.cyan("Freezing FC weights...")
+    # if not exclude_classes:
+    net.module.linear.weight.requires_grad = False
+    net.module.linear.bias.requires_grad = False
+    Colors.cyan("Freezing FC weights..")
     return net
+
+def test_word2vec(net, trainset, exclude_classes=()):
+    """ Check that word2vec weights are frozen in ZS rows """
+    net.eval()
+    try:
+        model = Word2Vec.load("./data/word2vec/word2veccorpus.model")
+    except:
+        raise Exception("Word2Vec model not found")
+    for cls in exclude_classes:
+        idx = trainset.classes.index(cls)
+        net.module.linear.weight.requires_grad = False
+        fc_weights = net.module.linear.weight.cpu().numpy()
+        print(fc_weights[idx] - model.wv[cls])
+        assert all(fc_weights[idx] == model.wv[cls])
+    Colors.cyan("Freezing certain FC rows check passed!")
