@@ -276,10 +276,10 @@ if args.ood_dataset:
 
 analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
+if args.ood_dataset:
+    args.oodset = ood_set
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
-if args.ood_dataset:
-    analyzer_kwargs['oodset'] = ood_set
 analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
 
 

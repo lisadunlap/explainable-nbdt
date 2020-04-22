@@ -22,7 +22,7 @@ import pandas as pd
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference', 'HardFullTreePrior', 'HardTrackNodes', 'SoftFullTreePrior')
+    'SingleInference', 'HardFullTreePrior', 'HardTrackNodes', 'SoftFullTreePrior', 'SoftFullTreeOODPrior')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
         'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path', 'ignore_labels',
         'oodset', 'ood_path_wnids')
@@ -547,6 +547,14 @@ class SoftFullTreeOODPrior(SoftFullTreePrior):
 
     """Evaluates model on a decision tree prior. Evaluation is soft.
      """
+    accepts_path_graph_analysis = True
+    accepts_path_wnids = True
+    accepts_json_save_path = True
+    accepts_weighted_average = True
+    accepts_csv_save_path = True
+    accepts_ignore_labels = True
+    accepts_oodset = True
+    accepts_ood_path_wnids = True
 
     def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, 
                  oodset, ood_path_wnids, ignore_labels=[],
