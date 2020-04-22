@@ -162,7 +162,6 @@ with torch.no_grad():
             break
 
     # insert vectors into linear layer for model
-    print(net.module.linear)
     fc_weights = net.module.linear.weight.cpu().numpy()
     for i, cls in enumerate(trainset.classes):
         if cls in cls_to_vec:

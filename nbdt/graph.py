@@ -57,6 +57,8 @@ def get_parser():
                         children corresponding to the parent nodes")
     parser.add_argument('--ignore-labels', nargs='*', type=int, default=[],
                         help='labels to ignore when clustering, will be added at the end')
+    parser.add_argument("--include-classes", nargs='*', type=str, help='classes to include')
+    parser.add_argument('--ood-path-wnids', type=str, help='path to wnids.txt for ood-dataset')
     return parser
 
 
@@ -99,15 +101,19 @@ def get_directory(dataset, root='./data'):
     return os.path.join(root, folder)
 
 
-def get_wnids_from_dataset(dataset, root='./data'):
+def get_wnids_from_dataset(dataset, root='./data', path_wnids_ood=None):
     directory = get_directory(dataset, root)
-    return get_wnids(os.path.join(directory, 'wnids.txt'))
+    return get_wnids(os.path.join(directory, 'wnids.txt'), path_wnids_ood)
 
 
-def get_wnids(path_wnids):
+def get_wnids(path_wnids, path_wnids_ood=None):
     with open(path_wnids) as f:
-        wnids = [wnid.strip() for wnid in f.readlines()]
-    return wnids
+        wnids = set([wnid.strip() for wnid in f.readlines()])
+    if path_wnids_ood:
+        with open(path_wnids_ood) as f:
+            wnids_ood = set([wnid.strip() for wnid in f.readlines()])
+            wnids = wnids - wnids_ood
+    return sorted(list(wnids))
 
 
 def get_graph_path_from_args(args):
