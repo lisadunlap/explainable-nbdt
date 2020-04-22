@@ -113,7 +113,7 @@ def get_wnids(path_wnids, path_wnids_ood=None):
         with open(path_wnids_ood) as f:
             wnids_ood = set([wnid.strip() for wnid in f.readlines()])
             wnids = wnids - wnids_ood
-    return sorted(list(wnids))
+    return list(wnids)
 
 
 def get_graph_path_from_args(args):
