@@ -322,16 +322,15 @@ def word2vec_model(net, trainset, exclude_classes=()):
     for i, cls in enumerate(trainset.classes):
         word_vec = model.wv[cls]
         fc_weights = np.append(fc_weights, np.array(word_vec, dtype=float))
-    print("FC weight shape: ",np.array(fc_weights).shape)
     fc_weights = fc_weights.reshape((len(trainset.classes),512))
-    print("new FC weight shape: ",np.array(fc_weights).shape)
     for i, cls in enumerate(trainset.classes):
         assert all(fc_weights[i] == model.wv[cls])
     Colors.cyan("All word2vec checks passed!")
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
     # freeze layer if exclude_classes in none (if not then need to set grad to zero in backward function)
-    if len(exclude_classes) == 0:
+    if not exclude_classes or len(exclude_classes) == 0:
         net.module.linear.weight.requires_grad = False
         net.module.linear.bias.requires_grad = False
+        Colors.cyan("Freezing FC weights...")
     return net

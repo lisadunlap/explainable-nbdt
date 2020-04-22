@@ -149,7 +149,7 @@ elif args.path_resume:
 
 
 if args.word2vec:
-    net = word2vec_model(net, trainset)
+    net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes)
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
@@ -191,6 +191,11 @@ def train(epoch, analyzer):
         outputs = net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
+        # Freeze rows of the last FC layer that correspond with the ZS classes
+        # TODO: optimize this with backward hook
+        if args.exclude_classes:
+            for cls in args.exclude_classes:
+                net.module.linear.weight.grad[trainset.classes.index(cls)] = 0
         optimizer.step()
 
         train_loss += loss.item()
