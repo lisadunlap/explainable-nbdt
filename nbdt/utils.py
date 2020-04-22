@@ -313,6 +313,7 @@ def word2vec_model(net, trainset, exclude_classes=()):
     the backward call"""
     from gensim.models import Word2Vec
 
+    print('==> Adding in word2vec embeddings...')
     fc_weights = []
     try:
         model = Word2Vec.load("./data/word2vec/wiki.en.word2vec.model")
@@ -326,7 +327,7 @@ def word2vec_model(net, trainset, exclude_classes=()):
     print("new FC weight shape: ",np.array(fc_weights).shape)
     for i, cls in enumerate(trainset.classes):
         assert all(fc_weights[i] == model.wv[cls])
-
+    Colors.cyan("All word2vec checks passed!")
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
     # freeze layer if exclude_classes in none (if not then need to set grad to zero in backward function)
