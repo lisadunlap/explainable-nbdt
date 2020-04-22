@@ -12,12 +12,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.init as init
+import torchvision.transforms as transforms
+
 from pathlib import Path
 
 # tree-generation consntants
 METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node')
-DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000', 'TinyImagenet200CombineClasses',
-            'CIFAR10IncludeClasses')
+DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000',
+            'TinyImagenet200CombineClasses', 'MiniPlaces', 'AnimalsWithAttributes2')
+
 DATASET_TO_FOLDER_NAME = {
     'CIFAR10': 'CIFAR10',
     'CIFAR100': 'CIFAR100',
@@ -25,7 +28,8 @@ DATASET_TO_FOLDER_NAME = {
     'TinyImagenet200IncludeClasses': 'tiny-imagenet-200-custom',
     'Imagenet1000' : 'imagenet-1000',
     'TinyImagenet200CombineClasses': 'tiny-imagenet-200-custom-combined',
-    'CIFAR10IncludeClasses': 'cifar10-combine'
+    'MiniPlaces': 'miniplaces',
+    'AnimalsWithAttributes2': 'awa2'
 }
 
 # main script constants
@@ -39,6 +43,10 @@ DEFAULT_TINYIMAGENET200_TREE = './data/tiny-imagenet-200/graph-wordnet-single.js
 DEFAULT_TINYIMAGENET200_WNIDS = './data/tiny-imagenet-200/wnids.txt'
 DEFAULT_IMAGENET1000_TREE = './data/imagenet-1000/graph-wordnet-single.json'
 DEFAULT_IMAGENET1000_WNIDS = './data/imagenet-1000/wnids.txt'
+DEFAULT_MINIPLACES_TREE = '/data/miniplaces/graph-default.json'
+DEFAULT_MINIPLACES_WNID = './data/miniplaces/wnids.txt'
+DEFAULT_AWA2_TREE = '/data/awa2/graph-default.json'
+DEFAULT_AWA2_WNID = './data/awa2/wnids.txt'
 
 
 DATASET_TO_PATHS = {
@@ -57,6 +65,14 @@ DATASET_TO_PATHS = {
     'Imagenet1000': {
         'path_graph': DEFAULT_IMAGENET1000_TREE,
         'path_wnids': DEFAULT_IMAGENET1000_WNIDS
+    },
+    'MiniPlaces': {
+        'path_graph': DEFAULT_MINIPLACES_TREE,
+        'path_wnids': DEFAULT_MINIPLACES_WNID
+    },
+    'AnimalsWithAttributes2': {
+        'path_graph': DEFAULT_AWA2_TREE,
+        'path_wnids': DEFAULT_AWA2_WNID
     }
 }
 
@@ -79,6 +95,33 @@ def populate_kwargs(args, kwargs, object, name='Dataset', keys=(), globals={}):
             Colors.red(
                 f'Warning: {name} does not support custom '
                 f'{key}: {value}')
+
+
+def get_transform_from_name(dataset_name, dataset, input_size):
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+    ])
+
+    # , 'TinyImagenet200IncludeClasses'
+    if dataset_name in ('TinyImagenet200', 'Imagenet1000'):
+        default_input_size = 64 if 'TinyImagenet200' in dataset_name else 224
+        input_size = input_size or default_input_size
+        transform_train = dataset.transform_train(input_size)
+        transform_test = dataset.transform_val(input_size)
+
+    if dataset_name in ('MiniPlaces'):
+        transform_train = dataset.transform_train()
+        transform_test = dataset.transform_test()
+
+    return transform_train, transform_test
 
 
 class Colors:

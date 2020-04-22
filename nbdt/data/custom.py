@@ -1,8 +1,11 @@
 import torchvision.datasets as datasets
 import torch
 import numpy as np
+import os
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
+import torchsample
+import json
 from collections import defaultdict
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
@@ -14,6 +17,7 @@ from collections import defaultdict
 from nbdt.graph import get_wnids, read_graph, get_leaves, get_non_leaves, \
     get_leaf_weights
 from . import imagenet
+from PIL import Image
 import torch.nn as nn
 import random
 
@@ -30,7 +34,7 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'CIFAR100ResampleLabels', 'TinyImagenet200ResampleLabels',
                    'Imagenet1000ResampleLabels', 'CIFAR10CombineClasses',
                    'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
-                   'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM')
+                   'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM',)
 keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes')
 
 
@@ -43,7 +47,9 @@ def add_arguments(parser):
     parser.add_argument('--combine-classes', nargs='+', type=str, action='append')
 
 
+
 def set_default_values(args):
+    print(DATASET_TO_PATHS)
     paths = DATASET_TO_PATHS[args.dataset.replace('IncludeLabels', '').replace('IncludeClasses', '').replace('ExcludeLabels', '').replace('ResampleLabels', '').replace('CombineLabels', '').replace('CombineClasses', '')]
     if not args.path_graph:
         args.path_graph = paths['path_graph']
@@ -154,6 +160,16 @@ class Node:
             for new_index, old_indices in sorted(
                 self.new_to_old_classes.items(), key=lambda t: t[0])
         ]
+
+    def prune_ignore_labels(self, ignore_labels):
+        """ remove labels from ignore_labels that are direct children of this node """
+        ignore_labels_pruned = []
+        for cls in ignore_labels:
+            child_idx = self.old_to_new_classes[cls]
+            if len(child_idx) == 0 or self.children[child_idx[0]] in self.wnids:
+                continue
+            ignore_labels_pruned.append(cls)
+        return ignore_labels_pruned
 
     @property
     def class_counts(self):
@@ -544,7 +560,7 @@ class ExcludeLabelsDataset(IncludeLabelsDataset):
 
     def __init__(self, dataset, exclude_labels=(0,)):
         k = len(dataset.classes)
-        include_labels = set(range(k)) - set(exclude_labels)
+        include_labels = list(set(range(k)) - set(exclude_labels))
         super().__init__(
             dataset=dataset,
             include_labels=include_labels)

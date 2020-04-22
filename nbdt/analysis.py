@@ -24,7 +24,7 @@ __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
     'SingleInference', 'HardFullTreePrior', 'HardTrackNodes', 'HardFullTreeOODPrior')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
-        'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path', 'ood_path_wnids')
+        'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path', 'ignore_labels', 'ood_path_wnids')
 
 def add_arguments(parser):
     parser.add_argument('--json-save-path', default=None, type=str,
@@ -35,6 +35,8 @@ def add_arguments(parser):
                     help='path for graph for analysis')
     parser.add_argument('--track-nodes', default=None, type=str, nargs='*',
                     help='node wnids to track')
+    parser.add_argument('--ignore-labels', nargs='*', type=int,
+                    help='node label indices to ignore for zeroshot')
 
 class Noop:
 
@@ -134,14 +136,16 @@ class HardEmbeddedDecisionRules(Noop):
     accepts_path_graph = True
     accepts_path_wnids = True
     accepts_weighted_average = True
+    accepts_ignore_labels = True
 
-    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, ignore_labels=[],
             weighted_average=False, use_wandb=False, run_name="HardEmbeddedDecisionRules"):
         super().__init__(trainset, testset, experiment_name, use_wandb,
                          run_name=run_name)
         self.nodes = Node.get_nodes(path_graph, path_wnids, trainset.classes)
         self.G = self.nodes[0].G
         self.wnid_to_node = {node.wnid: node for node in self.nodes}
+        self.ignore_labels = ignore_labels
 
         self.wnids = get_wnids(path_wnids)
         self.classes = trainset.classes
@@ -161,7 +165,7 @@ class HardEmbeddedDecisionRules(Noop):
         wnid_to_pred_selector = {}
         for node in self.nodes:
             selector, outputs_sub, targets_sub = HardTreeSupLoss.inference(
-                node, outputs, targets, self.weighted_average)
+                node, outputs, targets, self.weighted_average, self.ignore_labels)
             if not any(selector):
                 continue
             _, preds_sub = torch.max(outputs_sub, dim=1)
@@ -294,16 +298,16 @@ class HardFullTreePrior(Noop):
     accepts_path_wnids = True
     accepts_json_save_path = True
     accepts_weighted_average = True
+    accepts_ignore_labels = True
     accepts_csv_save_path = True
     accepts_oodset = True
     accepts_ood_path_wnids = True
 
-    """Evaluates model on a decision tree prior. Evaluation is deterministic.
-    Evaluates on entire tree, tracks all paths.
-    Use the --ood flag for pulling in out-of-distribution datasets.
-     """
-    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path='./out/full_tree_analysis/',
-                 csv_save_path='./out/cifar100.csv', weighted_average=False, use_wandb=False, run_name="HardFullTreePrior",
+    """Evaluates model on a decision tree prior. Evaluation is deterministic."""
+    """Evaluates on entire tree, tracks all paths."""
+    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, ignore_labels=[],
+                 json_save_path='./out/full_tree_analysis/', csv_save_path='./out/cifar100.csv', 
+                 weighted_average=False, use_wandb=False, run_name="HardFullTreePrior", 
                  oodset=None, ood_path_wnids=None):
         super().__init__(trainset, testset, experiment_name, use_wandb, run_name=run_name)
         # weird, sometimes self.classes are wnids, and sometimes they are direct classes.
@@ -311,6 +315,7 @@ class HardFullTreePrior(Noop):
         self.nodes = Node.get_nodes(path_graph_analysis, path_wnids, trainset.classes, ood_path_wnids)
         self.G = self.nodes[0].G
         self.wnid_to_node = {node.wnid: node for node in self.nodes}
+        self.ignore_labels = ignore_labels
 
         self.wnids = get_wnids(path_wnids, ood_path_wnids)
         self.classes = trainset.classes
@@ -349,7 +354,8 @@ class HardFullTreePrior(Noop):
         n_samples = outputs.size(0)
 
         for node in self.nodes:
-            outputs_sub = HardTreeSupLoss.get_output_sub(outputs, node, self.weighted_average)
+            ignore_classes_pruned = node.prune_ignore_labels(self.ignore_labels)
+            outputs_sub = HardTreeSupLoss.get_output_sub(outputs, node, self.weighted_average, ignore_classes_pruned)
             _, preds_sub = torch.max(outputs_sub, dim=1)
             preds_sub = list(map(int, preds_sub.cpu()))
             wnid_to_pred_selector[node.wnid] = preds_sub
