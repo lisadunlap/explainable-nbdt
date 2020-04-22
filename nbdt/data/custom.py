@@ -49,8 +49,12 @@ def add_arguments(parser):
 
 
 def set_default_values(args):
-    print(DATASET_TO_PATHS)
-    paths = DATASET_TO_PATHS[args.dataset.replace('IncludeLabels', '').replace('IncludeClasses', '').replace('ExcludeLabels', '').replace('ResampleLabels', '').replace('CombineLabels', '').replace('CombineClasses', '')]
+    exclude = ['IncludeLabels', 'IncludeClasses', 'ExcludeLabels', 'ResampleLabels', 'CombineLabels',
+               'CombineClasses', 'ExcludeClasses']
+    dataset_path = args.dataset
+    for e in exclude:
+        dataset_path = dataset_path.replace(e, '')
+    paths = DATASET_TO_PATHS[dataset_path]
     if not args.path_graph:
         args.path_graph = paths['path_graph']
     if not args.path_wnids:
@@ -615,26 +619,26 @@ class ExcludeClassesDataset(ExcludeLabelsDataset):
 
 class CIFAR10ExcludeClasses(ExcludeClassesDataset):
 
-    def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
+    def __init__(self, *args, root='./data', exclude_classes=('cat',), **kwargs):
         super().__init__(
             dataset=datasets.CIFAR10(*args, root=root, **kwargs),
-            exclude_labels=include_classes)
+            exclude_classes=exclude_classes)
 
 
 class CIFAR100ExcludeClasses(ExcludeClassesDataset):
 
-    def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
+    def __init__(self, *args, root='./data', exclude_classes=('cat',), **kwargs):
         super().__init__(
             dataset=datasets.CIFAR100(*args, root=root, **kwargs),
-            exclude_labels=include_classes)
+            exclude_classes=exclude_classes)
 
 
 class TinyImagenet200ExcludeClasses(ExcludeClassesDataset):
 
-    def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
+    def __init__(self, *args, root='./data', exclude_classes=('cat',), **kwargs):
         super().__init__(
             dataset=imagenet.TinyImagenet200(*args, root=root, **kwargs),
-            exclude_labels=include_classes)
+            exclude_classes=exclude_classes)
 
     @staticmethod
     def transform_train(input_size=64):
@@ -655,10 +659,10 @@ class TinyImagenet200ExcludeClasses(ExcludeClassesDataset):
 
 class Imagenet1000ExcludeClasses(ExcludeClassesDataset):
 
-    def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
+    def __init__(self, *args, root='./data', exclude_classes=('cat',), **kwargs):
         super().__init__(
             dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
-            exclude_labels=include_classes)
+            exclude_classes=exclude_classes)
 
 class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
     def __init__(self, root='./data',
