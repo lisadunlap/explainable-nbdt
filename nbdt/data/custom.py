@@ -250,7 +250,6 @@ class ResampleLabelsDataset(Dataset):
     accepts_probability_labels = True
 
     def __init__(self, dataset, probability_labels=1, drop_classes=False, seed=0):
-        #drop_classes=False
         self.dataset = dataset
         self.classes = dataset.classes
         self.labels = list(range(len(self.classes)))
@@ -323,10 +322,10 @@ class IncludeLabelsDataset(ResampleLabelsDataset):
     accepts_include_labels = True
     accepts_probability_labels = False
 
-    def __init__(self, dataset, include_labels=(0,)):
+    def __init__(self, dataset, include_labels=(0,), drop_classes=True):
         super().__init__(dataset, probability_labels=[
             int(cls in include_labels) for cls in range(len(dataset.classes))
-        ], drop_classes=True)
+        ], drop_classes=drop_classes)
         self.include_labels = include_labels
 
 
@@ -559,12 +558,13 @@ class ExcludeLabelsDataset(IncludeLabelsDataset):
     accepts_include_labels = False
     accepts_exclude_labels = True
 
-    def __init__(self, dataset, exclude_labels=(0,)):
+    def __init__(self, dataset, exclude_labels=(0,), drop_classes=False):
         k = len(dataset.classes)
         include_labels = list(set(range(k)) - set(exclude_labels))
         super().__init__(
             dataset=dataset,
-            include_labels=include_labels)
+            include_labels=include_labels,
+            drop_classes=drop_classes)
         self.include_labels = include_labels
 
 
@@ -613,39 +613,7 @@ class ExcludeClassesDataset(ExcludeLabelsDataset):
                 dataset.classes.index(cls) for cls in exclude_classes
             ])
 
-
-class CIFAR10ExcludeLabels(ExcludeLabelsDataset):
-
-    def __init__(self, *args, root='./data', include_labels=(0,), **kwargs):
-        super().__init__(
-            dataset=datasets.CIFAR10(*args, root=root, **kwargs),
-            exclude_labels=include_labels)
-
-
-class CIFAR100ExcludeLabels(ExcludeLabelsDataset):
-
-    def __init__(self, *args, root='./data', include_labels=(0,), **kwargs):
-        super().__init__(
-            dataset=datasets.CIFAR100(*args, root=root, **kwargs),
-            exclude_labels=include_labels)
-
-
-class TinyImagenet200ExcludeLabels(ExcludeLabelsDataset):
-
-    def __init__(self, *args, root='./data', include_labels=(0,), **kwargs):
-        super().__init__(
-            dataset=imagenet.TinyImagenet200(*args, root=root, **kwargs),
-            exclude_labels=include_labels)
-
-
-class Imagenet1000ExcludeLabels(ExcludeLabelsDataset):
-
-    def __init__(self, *args, root='./data', include_labels=(0,), **kwargs):
-        super().__init__(
-            dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
-            exclude_labels=include_labels)
-
-class CIFAR10ExcludeClasses(ExcludeLabelsDataset):
+class CIFAR10ExcludeClasses(ExcludeClassesDataset):
 
     def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
         super().__init__(
@@ -653,7 +621,7 @@ class CIFAR10ExcludeClasses(ExcludeLabelsDataset):
             exclude_labels=include_classes)
 
 
-class CIFAR100ExcludeClasses(ExcludeLabelsDataset):
+class CIFAR100ExcludeClasses(ExcludeClassesDataset):
 
     def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
         super().__init__(
@@ -661,7 +629,7 @@ class CIFAR100ExcludeClasses(ExcludeLabelsDataset):
             exclude_labels=include_classes)
 
 
-class TinyImagenet200ExcludeClasses(ExcludeLabelsDataset):
+class TinyImagenet200ExcludeClasses(ExcludeClassesDataset):
 
     def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
         super().__init__(
@@ -685,7 +653,7 @@ class TinyImagenet200ExcludeClasses(ExcludeLabelsDataset):
         ])
 
 
-class Imagenet1000ExcludeClasses(ExcludeLabelsDataset):
+class Imagenet1000ExcludeClasses(ExcludeClassesDataset):
 
     def __init__(self, *args, root='./data', include_classes=('cat',), **kwargs):
         super().__init__(
