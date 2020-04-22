@@ -610,7 +610,7 @@ class ExcludeClassesDataset(ExcludeLabelsDataset):
 
     def __init__(self, dataset, exclude_classes=()):
         super().__init__(dataset, exclude_labels=[
-                dataset.classes.index(cls) for cls in include_classes
+                dataset.classes.index(cls) for cls in exclude_classes
             ])
 
 
