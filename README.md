@@ -273,6 +273,22 @@ python add_zeroshot_vec.py --dataset=CIFAR10 --model=ResNet10 --new-classes cat 
 python main.py --dataset=CIFAR10 --model=ResNet10 --path-resume ./checkpoint/ckpt-CIFAR10-zeroshot-cat-truck-full.pth  --resume --eval --analysis ConfusionMatrix
 ```
 
+## Tree Inference Ignoring Zero Shot Classes
+
+Directly adding in feature vectors to the FC results in most samples from the original classes being classified
+as the newly inserted classes. To combat this, we can run inference through an induced tree that ignores the
+newly inserted weights until they are direct children of whatever node our path currently leads to. Assuming
+the weight vectors have already been inserted, to do this:
+1. Induce the tree by ignoring the new classes (`--ignore-labels`. This will induce a tree on all the other classes, then attach the
+new classes to an existing node with the closest weight.
+```
+python generate_hierarchy.py --method=induced --induced-checkpoint=./checkpoint/ckpt-CIFAR10-Exclude-0-1-full.pth --ignore-labels 0 1
+```
+2. Run analysis by passing the same `--ignore-labels` flag.
+```
+python main.py --dataset=CIFAR10 --model=ResNet10 --induced-checkpoint=./checkpoint/ckpt-CIFAR10-Exclude-0-1-full.pth --ignore-labels 0 1 --resume --eval --analysis=HardEmbeddedDecisionRules
+```
+
 ## Integrating a secondary OOD Dataset
 Currently, this process is slightly annoying because you will have to create a new `wnids.txt` file for each set of OOD classes you want to test (e.g. by using the `HardFullTreePrior` class with the OOD parameters). For example, the following code trains a model on a dataset with images from `CIFAR10 - {cat, train}`, then feeds in images of `cat` and `train` as the OOD dataset.
 *Note:* When listing out classes in parameters below, if you run into any errors, try alphabetizing the class names you pass in (this issue seems to come up every now and then).

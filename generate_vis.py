@@ -43,7 +43,7 @@ def generate_vis(path_template, data, name, fname, out_dir='out/'):
             "'TREE_DATA_CONSTANT_TO_BE_REPLACED'",
             json.dumps(data))
 
-    os.makedirs('out', exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
     path_html = f'{out_dir}{fname}-{name}.html'
     with open(path_html, 'w') as f:
         f.write(html)

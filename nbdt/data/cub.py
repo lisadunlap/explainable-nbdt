@@ -3,20 +3,24 @@ import pandas as pd
 from torchvision.datasets.folder import default_loader
 from torchvision.datasets.utils import download_url
 from torch.utils.data import Dataset
+import torchvision.transforms as transforms
+from PIL import Image
 
-__all__ = names = ('CUB2011')
+__all__ = names = ('CUB2011', 'CUB2011Train', 'CUB2011Val')
 
 
-class Cub2011(Dataset):
+class CUB2011(Dataset):
     base_folder = 'CUB_200_2011/images'
     url = 'http://www.vision.caltech.edu/visipedia-data/CUB-200-2011/CUB_200_2011.tgz'
     filename = 'CUB_200_2011.tgz'
     tgz_md5 = '97eceeb196236b17998738112f37df78'
 
-    def __init__(self, root, train=True, transform=None, loader=default_loader, download=True):
+    def __init__(self, root, train=True, download=True):
         self.root = os.path.expanduser(root)
-        self.transform = transform
-        self.loader = default_loader
+        if train:
+            self.transform = self.transform_train()
+        else:
+            self.transform = self.transform_val()
         self.train = train
 
         if download:
@@ -41,6 +45,26 @@ class Cub2011(Dataset):
             self.data = self.data[self.data.is_training_img == 1]
         else:
             self.data = self.data[self.data.is_training_img == 0]
+
+    @staticmethod
+    def transform_train(input_size=224):
+        return transforms.Compose([
+            transforms.Resize(input_size + 32),
+            transforms.RandomRotation(45),
+            transforms.RandomResizedCrop(input_size),  # TODO: may need updating
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        ])
+
+    @staticmethod
+    def transform_val(input_size=224):
+        return transforms.Compose([
+            transforms.Resize(input_size + 32),
+            transforms.CenterCrop(input_size),
+            transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        ])
 
     def _check_integrity(self):
         try:
@@ -74,9 +98,19 @@ class Cub2011(Dataset):
         sample = self.data.iloc[idx]
         path = os.path.join(self.root, self.base_folder, sample.filepath)
         target = sample.target - 1  # Targets start at 1 by default, so shift to 0
-        img = self.loader(path)
+        img = Image.open(path)
 
         if self.transform is not None:
             img = self.transform(img)
 
         return img, target
+
+class CUB2011Train(CUB2011):
+
+    def __init__(self, root='./data', *args, **kwargs):
+        super().__init__(root, train=True)
+
+class CUB2011Val(CUB2011):
+
+    def __init__(self, root='./data', *args, **kwargs):
+        super().__init__(root, train=False)

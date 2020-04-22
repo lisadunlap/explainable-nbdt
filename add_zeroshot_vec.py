@@ -81,16 +81,6 @@ testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, t
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=100, shuffle=False, num_workers=0)
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=0)
 
-'''
-import matplotlib.pyplot as plt
-sanityset = dataset(**dataset_kwargs, root='./data', train=False, download=True)
-for val in sanityset:
-    if trainset.classes[val[1]] == 'truck':
-        plt.imshow(val[0])
-        plt.show()
-        exit(0)
-'''
-
 # Model
 print('==> Building model..')
 model = getattr(models, args.model)
@@ -140,7 +130,10 @@ hooked_inputs = None
 
 from gensim.models import Word2Vec
 
-model = Word2Vec.load("./data/word2veccorpus")
+try:
+    model = Word2Vec.load("./data/wiki.en.word2vec.model")
+except:
+    print("Word2Vec model not found")
 
 
 def testhook(self, input, output):
@@ -169,7 +162,6 @@ with torch.no_grad():
             break
 
     # insert vectors into linear layer for model
-    print(net.module.linear)
     fc_weights = net.module.linear.weight.cpu().numpy()
     for i, cls in enumerate(trainset.classes):
         if cls in cls_to_vec:
