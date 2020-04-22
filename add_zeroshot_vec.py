@@ -131,9 +131,9 @@ hooked_inputs = None
 from gensim.models import Word2Vec
 
 try:
-    model = Word2Vec.load("./data/wiki.en.word2vec.model")
+    model = Word2Vec.load("./data/word2vec/wiki.en.word2vec.model")
 except:
-    print("Word2Vec model not found")
+    raise Exception("Word2Vec model not found")
 
 
 def testhook(self, input, output):

@@ -307,16 +307,17 @@ def generate_fname(dataset, model, path_graph, wnid=None, name='',
             fname += '-weighted'
     return fname
 
-def word2vec_model(net, trainset, added=False):
-    import gensim
+def word2vec_model(net, trainset, exclude_classes=()):
+    """ Sets FC layer weights to word2vec embeddings, freezing them unless
+    exclude classes is given, in which case those specific rows are frozen in
+    the backward call"""
     from gensim.models import Word2Vec
-    import gensim.downloader as api
 
     fc_weights = []
     try:
-        model = Word2Vec.load("./data/wiki.en.word2vec.model")
+        model = Word2Vec.load("./data/word2vec/wiki.en.word2vec.model")
     except:
-        print("Word2Vec model not found")
+        raise Exception("Word2Vec model not found")
     for i, cls in enumerate(trainset.classes):
         word_vec = model.wv[cls]
         fc_weights = np.append(fc_weights, np.array(word_vec, dtype=float))
@@ -325,8 +326,11 @@ def word2vec_model(net, trainset, added=False):
     print("new FC weight shape: ",np.array(fc_weights).shape)
     for i, cls in enumerate(trainset.classes):
         assert all(fc_weights[i] == model.wv[cls])
+
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
-    net.module.linear.weight.requires_grad = False
-    net.module.linear.bias.requires_grad = False
+    # freeze layer if exclude_classes in none (if not then need to set grad to zero in backward function)
+    if len(exclude_classes) == 0:
+        net.module.linear.weight.requires_grad = False
+        net.module.linear.bias.requires_grad = False
     return net
