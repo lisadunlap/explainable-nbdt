@@ -54,6 +54,7 @@ parser.add_argument('--experiment-name', type=str, help='name of experiment in w
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
 parser.add_argument('--word2vec', action='store_true')
 parser.add_argument("--track_nodes", nargs="*", type=str, help="nodes to keep track of")
+parser.add_argument("--train-word2vec", action='store_true', help="fit model to pretrained weights")
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -150,6 +151,9 @@ elif args.path_resume:
 
 if args.word2vec:
     net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes)
+    net.module.linear.weight.requires_grad = False
+    net.module.linear.bias.requires_grad = False
+    net.module.linear.requires_grad = False
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
@@ -193,9 +197,9 @@ def train(epoch, analyzer):
         loss.backward()
         # Freeze rows of the last FC layer that correspond with the ZS classes
         # TODO: optimize this with backward hook
-        if args.exclude_classes:
-            for cls in args.exclude_classes:
-                net.module.linear.weight.grad[trainset.classes.index(cls)] = 0
+        # if args.exclude_classes:
+        #     for cls in args.exclude_classes:
+        #         net.module.linear.weight.grad[trainset.classes.index(cls)] = 0
         optimizer.step()
 
         train_loss += loss.item()

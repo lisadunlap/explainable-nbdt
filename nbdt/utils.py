@@ -8,6 +8,7 @@ import sys
 import time
 import math
 import numpy as np
+from numpy import linalg as LA
 
 import torch
 import torch.nn as nn
@@ -79,6 +80,33 @@ DATASET_TO_PATHS = {
     }
 }
 
+WORD2VEC_NAMES_TO_MODEL = {
+    'wiki': {
+        'name': 'glove-wiki-gigaword-300',
+        'dim': 300
+    },
+    'wiki-300': {
+        'name': 'glove-wiki-gigaword-300',
+        'dim': 300
+    },
+    'wiki-200': {
+        'name': 'glove-wiki-gigaword-200',
+        'dim': 200
+    },
+    'wiki-100': {
+        'name': 'glove-wiki-gigaword-100',
+        'dim': 100
+    },
+    'wiki-50': {
+        'name': 'glove-wiki-gigaword-50',
+        'dim': 50
+    },
+
+    'twitter': {
+        'name': 'glove-twitter-200',
+        'dim': 200
+    }
+}
 
 def populate_kwargs(args, kwargs, object, name='Dataset', keys=(), globals={}):
     for key in keys:
@@ -322,7 +350,7 @@ def word2vec_model(net, trainset, exclude_classes=None, eval=False, pretrained=T
     fc_weights = []
     if pretrained:
         import gensim.downloader as api
-        model = api.load(f'glove-wiki-gigaword-{dimension}')
+        model = api.load('conceptnet-numberbatch-17-06-300')
         projection_matrix = np.random.rand(dimension, 512)
     else:
         try:
@@ -330,26 +358,30 @@ def word2vec_model(net, trainset, exclude_classes=None, eval=False, pretrained=T
         except:
             raise Exception("Word2Vec model not found")
     for i, cls in enumerate(trainset.classes):
-        word_vec = model.wv[cls]
+
         if pretrained:
+            word_vec = model.wv[f"/c/en/{cls}"]
             word_vec = np.asarray(word_vec).reshape(1, dimension)
             word_vec = np.matmul(word_vec, projection_matrix)[0]
             print(len(np.array(word_vec, dtype=float)))
-        fc_weights = np.append(fc_weights, np.array(word_vec/max(word_vec), dtype=float))
-    fc_weights = fc_weights.reshape((len(trainset.classes),512))
-    for i, cls in enumerate(trainset.classes):
-        if pretrained:
-            word_vec = np.matmul(model.wv[cls], projection_matrix)
-            assert all(fc_weights[i] == word_vec/max(word_vec))
+            fc_weights = np.append(fc_weights, np.array(word_vec/LA.norm(word_vec), dtype=float))
         else:
-            assert all(fc_weights[i] == model.wv[cls])
+            word_vec = model.wv[cls]
+            fc_weights = np.append(fc_weights, np.array(word_vec, dtype=float))
+    fc_weights = fc_weights.reshape((len(trainset.classes),512))
+    # for i, cls in enumerate(trainset.classes):
+    #     if pretrained:
+    #         word_vec = np.matmul(model.wv[cls], projection_matrix)
+    #         assert all(fc_weights[i] == word_vec/LA.norm(word_vec))
+    #     else:
+    #         assert all(fc_weights[i] == model.wv[cls])
     Colors.cyan("All word2vec checks passed!")
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
     # freeze layer if exclude_classes in none (if not then need to set grad to zero in backward function)
     # if not exclude_classes:
-    net.module.linear.weight.requires_grad = False
-    net.module.linear.bias.requires_grad = False
+    # net.module.linear.weight.requires_grad = False
+    # net.module.linear.bias.requires_grad = False
     Colors.cyan("Freezing FC weights..")
     return net
 
@@ -367,3 +399,6 @@ def test_word2vec(net, trainset, exclude_classes=()):
         print(fc_weights[idx] - model.wv[cls])
         assert all(fc_weights[idx] == model.wv[cls])
     Colors.cyan("Freezing certain FC rows check passed!")
+
+def store_word2vec(vec, cls, projected=False):
+    """ Stored Word2Vec into mem, for quick recall"""
