@@ -1,8 +1,11 @@
 import torchvision.datasets as datasets
 import torch
 import numpy as np
+import os
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
+import torchsample
+import json
 from collections import defaultdict
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
@@ -14,6 +17,7 @@ from collections import defaultdict
 from nbdt.graph import get_wnids, read_graph, get_leaves, get_non_leaves, \
     get_leaf_weights
 from . import imagenet
+from PIL import Image
 import torch.nn as nn
 import random
 
@@ -23,11 +27,13 @@ __all__ = names = ('CIFAR10IncludeLabels', 'CIFAR10FewShotLabels',
                    'CIFAR100IncludeClasses', 'TinyImagenet200IncludeClasses',
                    'Imagenet1000IncludeClasses', 'CIFAR10ExcludeLabels',
                    'CIFAR100ExcludeLabels', 'TinyImagenet200ExcludeLabels',
-                   'Imagenet1000ExcludeLabels', 'CIFAR10ResampleLabels',
+                   'Imagenet1000ExcludeLabels', 'CIFAR10ExcludeClasses',
+                   'CIFAR100ExcludeClasses', 'TinyImagenet200ExcludeClasses',
+                   'Imagenet1000ExcludeClasses','CIFAR10ResampleLabels',
                    'CIFAR100ResampleLabels', 'TinyImagenet200ResampleLabels',
                    'Imagenet1000ResampleLabels', 'CIFAR10CombineClasses',
                    'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
-                   'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM')
+                   'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM',)
 keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes',
         'fewshot_labels', 'fewshot_gt_nsamples', 'fewshot_nsamples')
 
@@ -37,6 +43,7 @@ def add_arguments(parser):
     parser.add_argument('--include-labels', nargs='*', type=int)
     parser.add_argument('--exclude-labels', nargs='*', type=int)
     parser.add_argument('--include-classes', nargs='*', type=str)
+    parser.add_argument('--exclude-classes', nargs='*', type=str)
     parser.add_argument('--combine-classes', nargs='+', type=str, action='append')
 
     parser.add_argument('--fewshot-labels', nargs='*', type=int)
@@ -46,8 +53,14 @@ def add_arguments(parser):
                         help='How many total samples of each few shot class to feed in')
 
 
+
 def set_default_values(args):
-    paths = DATASET_TO_PATHS[args.dataset.replace('IncludeLabels', '').replace('IncludeClasses', '').replace('ExcludeLabels', '').replace('ResampleLabels', '').replace('CombineLabels', '').replace('CombineClasses', '').replace('FewShotLabels', '')]
+    exclude = ['IncludeLabels', 'IncludeClasses', 'ExcludeLabels', 'ResampleLabels', 'CombineLabels',
+               'CombineClasses', 'ExcludeClasses', 'FewShotLabels']
+    dataset_path = args.dataset
+    for e in exclude:
+        dataset_path = dataset_path.replace(e, '')
+    paths = DATASET_TO_PATHS[dataset_path]
     if not args.path_graph:
         args.path_graph = paths['path_graph']
     if not args.path_wnids:
@@ -59,12 +72,14 @@ class Node:
     def __init__(self, wnid, classes,
             path_graph=DEFAULT_CIFAR10_TREE,
             path_wnids=DEFAULT_CIFAR10_WNIDS,
-            other_class=False):
+            other_class=False,
+            path_wnids_ood=None):
         self.path_graph = path_graph
         self.path_wnids = path_wnids
+        self.path_wnids_ood = path_wnids_ood
 
         self.wnid = wnid
-        self.wnids = get_wnids(path_wnids)
+        self.wnids = get_wnids(path_wnids, path_wnids_ood)
         self.G = read_graph(path_graph)
 
         self.original_classes = classes
@@ -156,6 +171,16 @@ class Node:
                 self.new_to_old_classes.items(), key=lambda t: t[0])
         ]
 
+    def prune_ignore_labels(self, ignore_labels):
+        """ remove labels from ignore_labels that are direct children of this node """
+        ignore_labels_pruned = []
+        for cls in ignore_labels:
+            child_idx = self.old_to_new_classes[cls]
+            if len(child_idx) == 0 or self.children[child_idx[0]] in self.wnids:
+                continue
+            ignore_labels_pruned.append(cls)
+        return ignore_labels_pruned
+
     @property
     def class_counts(self):
         """Number of old classes in each new class"""
@@ -192,17 +217,17 @@ class Node:
         self._class_weights = class_weights
 
     @staticmethod
-    def get_wnid_to_node(path_graph, path_wnids, classes):
+    def get_wnid_to_node(path_graph, path_wnids, classes, path_wnids_ood=None):
         wnid_to_node = {}
         G = read_graph(path_graph)
         for wnid in get_non_leaves(G):
             wnid_to_node[wnid] = Node(
-                wnid, classes, path_graph=path_graph, path_wnids=path_wnids)
+                wnid, classes, path_graph=path_graph, path_wnids=path_wnids, path_wnids_ood=path_wnids_ood)
         return wnid_to_node
 
     @staticmethod
-    def get_nodes(path_graph, path_wnids, classes):
-        wnid_to_node = Node.get_wnid_to_node(path_graph, path_wnids, classes)
+    def get_nodes(path_graph, path_wnids, classes, path_wnids_ood=None):
+        wnid_to_node = Node.get_wnid_to_node(path_graph, path_wnids, classes, path_wnids_ood)
         wnids = sorted(wnid_to_node)
         nodes = [wnid_to_node[wnid] for wnid in wnids]
         return nodes
@@ -307,10 +332,10 @@ class IncludeLabelsDataset(ResampleLabelsDataset):
     accepts_include_labels = True
     accepts_probability_labels = False
 
-    def __init__(self, dataset, include_labels=(0,)):
+    def __init__(self, dataset, include_labels=(0,), drop_classes=True):
         super().__init__(dataset, probability_labels=[
             int(cls in include_labels) for cls in range(len(dataset.classes))
-        ], drop_classes=True)
+        ], drop_classes=drop_classes)
         self.include_labels = include_labels
 
 
@@ -543,12 +568,13 @@ class ExcludeLabelsDataset(IncludeLabelsDataset):
     accepts_include_labels = False
     accepts_exclude_labels = True
 
-    def __init__(self, dataset, exclude_labels=(0,)):
+    def __init__(self, dataset, exclude_labels=(0,), drop_classes=False):
         k = len(dataset.classes)
-        include_labels = set(range(k)) - set(exclude_labels)
+        include_labels = list(set(range(k)) - set(exclude_labels))
         super().__init__(
             dataset=dataset,
-            include_labels=include_labels)
+            include_labels=include_labels,
+            drop_classes=drop_classes)
         self.include_labels = include_labels
 
 
@@ -583,6 +609,66 @@ class Imagenet1000ExcludeLabels(ExcludeLabelsDataset):
             dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
             exclude_labels=exclude_labels)
 
+class ExcludeClassesDataset(ExcludeLabelsDataset):
+    """
+    Dataset that includes only the labels provided, with a limited number of
+    samples. Note that classes are strings, like 'cat' or 'dog'.
+    """
+
+    accepts_exclude_labels = False
+    accepts_exclude_classes = True
+
+    def __init__(self, dataset, exclude_classes=()):
+        super().__init__(dataset, exclude_labels=[
+                dataset.classes.index(cls) for cls in exclude_classes
+            ])
+
+class CIFAR10ExcludeClasses(ExcludeClassesDataset):
+
+    def __init__(self, *args, root='./data', exclude_classes=('cat',), **kwargs):
+        super().__init__(
+            dataset=datasets.CIFAR10(*args, root=root, **kwargs),
+            exclude_classes=exclude_classes)
+
+
+class CIFAR100ExcludeClasses(ExcludeClassesDataset):
+
+    def __init__(self, *args, root='./data', exclude_classes=('cat',), **kwargs):
+        super().__init__(
+            dataset=datasets.CIFAR100(*args, root=root, **kwargs),
+            exclude_classes=exclude_classes)
+
+
+class TinyImagenet200ExcludeClasses(ExcludeClassesDataset):
+
+    def __init__(self, *args, root='./data', exclude_classes=('cat',), **kwargs):
+        super().__init__(
+            dataset=imagenet.TinyImagenet200(*args, root=root, **kwargs),
+            exclude_classes=exclude_classes)
+
+    @staticmethod
+    def transform_train(input_size=64):
+        return transforms.Compose([
+            transforms.RandomCrop(input_size, padding=8),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262]),
+        ])
+
+    @staticmethod
+    def transform_val(input_size=-1):
+        return transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262]),
+        ])
+
+
+class Imagenet1000ExcludeClasses(ExcludeClassesDataset):
+
+    def __init__(self, *args, root='./data', exclude_classes=('cat',), **kwargs):
+        super().__init__(
+            dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
+            exclude_classes=exclude_classes)
 
 class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
     def __init__(self, root='./data',
@@ -604,7 +690,6 @@ class TinyImagenet200GradCAM(TinyImagenet200IncludeClasses):
         )
         print(curr_img, cam_mask)
         masked_img = curr_img[cam_mask > self.cam_threshold]
-
         return curr_img, masked_img
 
 class FewShotLabelsDataset(Dataset):

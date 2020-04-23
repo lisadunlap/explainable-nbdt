@@ -7,7 +7,6 @@ import torch.backends.cudnn as cudnn
 from nbdt import data, analysis, loss
 
 import torchvision
-import torchvision.transforms as transforms
 
 import os
 import argparse
@@ -15,7 +14,8 @@ import wandb
 
 import models
 from nbdt.utils import (
-    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors
+    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors, word2vec_model,
+    get_transform_from_name,
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
@@ -30,7 +30,9 @@ parser.add_argument('--dataset', default='CIFAR10', choices=datasets)
 parser.add_argument('--model', default='ResNet18', choices=list(models.get_model_choices()))
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
-
+parser.add_argument('--ood-dataset', choices=datasets, help='dataset to use for out of distribution images')
+parser.add_argument('--ood-classes', nargs='*', type=str, help='classes to include for ood-dataset')
+parser.add_argument('--ood-path-wnids', type=str, help='path to wnids.txt for ood-dataset')
 # extra general options for main script
 parser.add_argument('--checkpoint-fname', default='',
                     help='Overrides checkpoint name generation')
@@ -50,6 +52,8 @@ parser.add_argument('--input-size', type=int,
                     'input-size + 32.')
 parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
+parser.add_argument('--word2vec', action='store_true')
+parser.add_argument("--track_nodes", nargs="*", type=str, help="nodes to keep track of")
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -73,26 +77,9 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # Data
 print('==> Preparing data..')
-transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-
-transform_test = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-
 dataset = getattr(data, args.dataset)
 
-# , 'TinyImagenet200IncludeClasses'
-if args.dataset in ('TinyImagenet200', 'Imagenet1000'):
-    default_input_size = 64 if 'TinyImagenet200' in args.dataset else 224
-    input_size = args.input_size or default_input_size
-    transform_train = dataset.transform_train(input_size)
-    transform_test = dataset.transform_val(input_size)
+transform_train, transform_test = get_transform_from_name(args.dataset, dataset, args.input_size)
 
 dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
@@ -161,13 +148,15 @@ elif args.path_resume:
         Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
 
+if args.word2vec:
+    net = word2vec_model(net, trainset)
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
     keys=loss.keys, globals=globals())
 criterion = class_criterion(**loss_kwargs)
 
-optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
 def adjust_learning_rate(epoch, lr):
     if epoch <= 150 / 350. * args.epochs:  # 32k iterations
@@ -177,11 +166,19 @@ def adjust_learning_rate(epoch, lr):
     else:
       return lr/100
 
+def exp_lr_scheduler(epoch, init_lr=0.0001, lr_decay_epoch=30, weight=0.1):
+    lr = init_lr * (weight ** (epoch // lr_decay_epoch))
+    return lr
+
 # Training
 def train(epoch, analyzer):
     analyzer.start_train(epoch)
-    lr = adjust_learning_rate(epoch, args.lr)
-    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+    if args.dataset in ("MiniPlaces",):
+        lr = exp_lr_scheduler(epoch)
+        optimizer = optim.RMSprop(net.parameters(), lr=lr)
+    else:
+        lr = adjust_learning_rate(epoch, args.lr)
+        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
 
     print('\nEpoch: %d' % epoch)
     net.train()
@@ -209,9 +206,11 @@ def train(epoch, analyzer):
 
     analyzer.end_train(epoch)
 
-def test(epoch, analyzer, checkpoint=True):
+def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     analyzer.start_test(epoch)
-
+    global testloader
+    if ood_loader:
+        testloader = ood_loader
     global best_acc
     net.eval()
     test_loss = 0
@@ -266,11 +265,21 @@ def test(epoch, analyzer, checkpoint=True):
 
     analyzer.end_test(epoch)
 
+if args.ood_dataset:
+    ood_dataset = getattr(data, args.ood_dataset)
+    ood_dataset_kwargs = {}
+    populate_kwargs(args, ood_dataset_kwargs, ood_dataset, name=f'Dataset {args.ood_dataset}',
+        keys=data.custom.keys, globals=globals())
+    ood_dataset_kwargs['include_classes'] = args.ood_classes # manual override
+    ood_set = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
+    ood_loader = torch.utils.data.DataLoader(ood_set, batch_size=args.batch_size, shuffle=True, num_workers=2)
 
 analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
+if args.ood_dataset:
+    analyzer_kwargs['oodset'] = ood_set
 analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
 
 
@@ -278,9 +287,12 @@ if args.eval:
     if not args.resume and not args.pretrained:
         Colors.red(' * Warning: Model is not loaded from checkpoint. '
         'Use --resume or --pretrained (if supported)')
-
+    net.eval()
     analyzer.start_epoch(0)
-    test(0, analyzer, checkpoint=False)
+    if args.ood_dataset:
+        test(0, analyzer, checkpoint=False, ood_loader=ood_loader)
+    else:
+        test(0, analyzer, checkpoint=False)
     exit()
 
 for epoch in range(start_epoch, args.epochs):

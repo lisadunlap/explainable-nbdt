@@ -30,7 +30,7 @@ def main():
     parser = get_parser()
 
     args = parser.parse_args()
-    wnids = get_wnids_from_dataset(args.dataset)
+    wnids = get_wnids_from_dataset(args.dataset, path_wnids_ood=args.ood_path_wnids)
 
     if args.method == 'wordnet':
         G = build_minimal_wordnet_graph(wnids, args.single_path)
@@ -41,7 +41,8 @@ def main():
             checkpoint=args.induced_checkpoint,
             linkage=args.induced_linkage,
             affinity=args.induced_affinity,
-            branching_factor=args.branching_factor)
+            branching_factor=args.branching_factor,
+            ignore_labels=args.ignore_labels)
     else:
         raise NotImplementedError(f'Method "{args.method}" not yet handled.')
     print_graph_stats(G, 'matched', args)

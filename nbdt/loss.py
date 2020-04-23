@@ -114,19 +114,24 @@ class HardTreeSupLoss(TreeSupLoss):
         return loss
 
     @classmethod
-    def inference(cls, node, outputs, targets, weighted_average=False):
-        classes = [node.old_to_new_classes[int(t)] for t in targets]
+    def inference(cls, node, outputs, targets, weighted_average=False, ignore_classes=[]):
+        # which classes to ignore? the ones in ignore_classes that are not direct leaves of our node
+        ignore_classes_pruned = node.prune_ignore_labels(ignore_classes)
+
+        classes = [node.old_to_new_classes[int(t)] if int(t) in ignore_classes_pruned else [] for t in targets]
         selector = [bool(cls) for cls in classes]
         targets_sub = [cls[0] for cls in classes if cls]
 
         _outputs = outputs[selector]
         if _outputs.size(0) == 0:
             return selector, _outputs[:, :node.num_classes], targets_sub
-        outputs_sub = cls.get_output_sub(_outputs, node, weighted_average)
+
+        outputs_sub = cls.get_output_sub(_outputs, node, weighted_average, ignore_classes_pruned)
+
         return selector, outputs_sub, targets_sub
 
     @staticmethod
-    def get_output_sub(_outputs, node, weighted_average=False):
+    def get_output_sub(_outputs, node, weighted_average=False, ignore_classes=[]):
         if weighted_average:
             node.move_leaf_weights_to(_outputs.device)
 
@@ -134,10 +139,18 @@ class HardTreeSupLoss(TreeSupLoss):
             node.new_to_leaf_weights[new_label] if weighted_average else 1
             for new_label in range(node.num_classes)
         ]
+
+        cls_idxs = [node.new_to_old_classes[new_label] for new_label in range(node.num_classes)]
+
+        for cls in ignore_classes:
+            for cls_idx in cls_idxs:
+                if cls in cls_idx:
+                    cls_idx.remove(cls)
+                    
         return torch.stack([
             (_outputs * weight).T
-            [node.new_to_old_classes[new_label]].mean(dim=0)
-            for new_label, weight in zip(range(node.num_classes), weights)
+            [cls_idx].mean(dim=0)
+            for cls_idx, weight in zip(cls_idxs, weights)
         ]).T
 
 
