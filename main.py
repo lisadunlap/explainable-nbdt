@@ -151,9 +151,7 @@ elif args.path_resume:
 
 if args.word2vec:
     net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes)
-    net.module.linear.weight.requires_grad = False
-    net.module.linear.bias.requires_grad = False
-    net.module.linear.requires_grad = False
+
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
