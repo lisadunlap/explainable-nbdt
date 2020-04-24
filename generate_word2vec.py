@@ -1,4 +1,4 @@
-'''Train CIFAR10 with PyTorch.'''
+'''Generates and stores Word2Vec embeddings from pretrained model for dataset classes'''
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -38,11 +38,8 @@ def get_word2vec(trainset, dimension=300, save_path='./data'):
         np.save('./data/projection.npy', projection_matrix)
 
     for i, cls in enumerate(trainset.classes):
-        word_vec = model.wv[f"/c/en/{cls}"]
-        word_vec = np.asarray(word_vec).reshape(1, dimension)
-        word_vec = np.matmul(word_vec, projection_matrix)[0]
-        word_vec = np.array(word_vec/LA.norm(word_vec), dtype=float)
-        np.save(path+cls+'.npy', word_vec)
+        word_vec = model[f"/c/en/{cls}"]
+        np.save(path + cls + '.npy', word_vec)
     Colors.cyan(f"Word2Vec embeddings save to {path}")
 
 if __name__ == '__main__':

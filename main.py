@@ -150,7 +150,7 @@ elif args.path_resume:
 
 
 if args.word2vec:
-    net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes)
+    net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset)
 
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
