@@ -344,7 +344,7 @@ def get_saved_word2vec(path, dimension, projection_matrix):
     word_vec = np.matmul(word_vec, projection_matrix)[0]
     return np.array(word_vec / LA.norm(word_vec), dtype=float)
 
-def word2vec_model(net, trainset, exclude_classes=None, dimension=300, dataset_name='CIFAR10'):
+def word2vec_model(net, trainset, dataset_name='CIFAR10', exclude_classes=None, dimension=300):
     """ Sets FC layer weights to word2vec embeddings, freezing them unless
     exclude classes is given, in which case those specific rows are frozen in
     the backward call"""
@@ -359,6 +359,7 @@ def word2vec_model(net, trainset, exclude_classes=None, dimension=300, dataset_n
     try:
         projection_matrix = np.load('./data/projection.npy')
     except:
+        print('==> saving projection matrix')
         projection_matrix = np.random.rand(dimension, 512)
         np.save('./data/projection.npy', projection_matrix)
 
@@ -366,20 +367,22 @@ def word2vec_model(net, trainset, exclude_classes=None, dimension=300, dataset_n
         word_vec = get_saved_word2vec(word2vec_path+cls+'.npy', dimension, projection_matrix)
         fc_weights = np.append(fc_weights, word_vec)
     fc_weights = fc_weights.reshape((len(trainset.classes), 512))
-    Colors.cyan("All word2vec checks passed!")
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
+    # test_word2vec(net, trainset, dataset_name, exclude_classes, dimension)
+    # Colors.cyan("All word2vec checks passed!")
 
     # freeze layer
-    net.module.linear.weight.requires_grad = False
-    net.module.linear.bias.requires_grad = False
-    net.module.linear.requires_grad = False
-    Colors.cyan("Freezing FC weights..")
+    if not exclude_classes:
+        net.module.linear.weight.requires_grad = False
+        net.module.linear.bias.requires_grad = False
+        net.module.linear.requires_grad = False
+        Colors.cyan("Freezing FC weights..")
     return net
 
-def test_word2vec(net, trainset, exclude_classes=(), dataset_name='CIFAR10', dimension=300):
+def test_word2vec(net, trainset, dataset_name='CIFAR10', exclude_classes=None, dimension=300):
     """ Check that word2vec weights are frozen in ZS rows """
-    word2vec_path = os.path.join(os.path.join(trainset.root, DATASET_TO_FOLDER_NAME[dataset_name]), "word2vec")
+    word2vec_path = os.path.join(os.path.join(trainset.root, DATASET_TO_FOLDER_NAME[dataset_name]), "word2vec/")
     if not os.path.exists(word2vec_path):
         raise Exception("No saved word2vec embeddings, run generate_word2vec.py")
 
@@ -390,10 +393,10 @@ def test_word2vec(net, trainset, exclude_classes=(), dataset_name='CIFAR10', dim
         raise Exception("Can't find projection matrix")
 
     # get FC weights
-    fc_weights = net.module.linear.weight.cpu().numpy()
+    fc_weights = net.module.linear.weight.detach().cpu().numpy()
 
     # if no exclude classes, all FC rows should be word2vec embeddings
-    if len(exclude_classes) == 0:
+    if not exclude_classes:
         for i, cls in enumerate(trainset.classes):
             word_vec = get_saved_word2vec(word2vec_path+cls+'.npy', dimension, projection_matrix)
             assert all(fc_weights[i] == word_vec)
