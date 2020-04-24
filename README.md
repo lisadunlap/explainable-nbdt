@@ -256,6 +256,14 @@ python modify_tree.py --json-path=./data/CIFAR10/graph-induced-wrn28_10_cifar10.
 
 To log results on weights and biases (which is strongly recommended), you must first create an account and run your command (either training, inference, or analysis), with the `--wandb` flag. The first time you run it you will be prompted to enter your api key.
 
+## Generating Word2Vec Embeddings for Zeroshot/Fewshot training
+
+To use word2vec embeddings, call `generate_word2vec.py` to generate and store Word2vec embeddings for your dataset before training. Since the model is pretrained, run `pip install gensim` if it is not installed
+
+Example:
+```
+python generate_word2vec.py --dataset CIFAR10
+```
 
 ## Zero Shot CIFAR10
 
