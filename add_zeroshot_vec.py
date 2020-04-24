@@ -21,7 +21,7 @@ from PIL import Image, ImageOps
 from PIL.ImageColor import getcolor
 
 from nbdt.utils import (
-    generate_fname, populate_kwargs, Colors
+    generate_fname, populate_kwargs, Colors, get_saved_word2vec, DATASET_TO_FOLDER_NAME
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
@@ -46,6 +46,7 @@ parser.add_argument('--new-classes', nargs='*',
 parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
 parser.add_argument('--word2vec', action='store_true')
+parser.add_argument('--dimension', type=int, default=300, help='dimension of word2vec embeddings')
 
 data.custom.add_arguments(parser)
 
@@ -125,16 +126,7 @@ if args.resume:
 
 # get one sample of each zeroshot class, and get its output at linear layer
 cls_to_vec = {cls: None for cls in args.new_classes}
-
 hooked_inputs = None
-
-from gensim.models import Word2Vec
-
-try:
-    model = Word2Vec.load("./data/wiki.en.word2vec.model")
-except:
-    print("Word2Vec model not found")
-
 
 def testhook(self, input, output):
     global hooked_inputs
@@ -144,6 +136,15 @@ def testhook(self, input, output):
 net.module.linear.register_forward_hook(testhook)
 
 net.eval()
+
+# load projection matrix
+if args.word2vec:
+    try:
+        projection_matrix = np.load('./data/projection.npy')
+    except:
+        projection_matrix = np.random.rand(args.dimension, 512)
+        np.save('./data/projection.npy', projection_matrix)
+    word2vec_path = os.path.join(os.path.join(trainset.root, DATASET_TO_FOLDER_NAME[args.dataset]), "word2vec/")
 
 with torch.no_grad():
     for _, (inputs, labels) in enumerate(trainloader):
@@ -155,7 +156,8 @@ with torch.no_grad():
             if cls_name in cls_to_vec and cls_to_vec[cls_name] is None:
                 done = False
                 if args.word2vec:
-                    cls_to_vec[cls_name] = model.wv[cls_name]
+                    word_vec = get_saved_word2vec(word2vec_path + cls_name + '.npy', args.dimension, projection_matrix)
+                    cls_to_vec[cls_name] = word_vec
                 else:
                     cls_to_vec[cls_name] = vec[0]
         if done:
