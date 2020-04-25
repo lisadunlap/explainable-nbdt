@@ -15,7 +15,7 @@ import wandb
 import models
 from nbdt.utils import (
     progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors, word2vec_model,
-    get_transform_from_name,
+    get_transform_from_name, test_word2vec
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
@@ -54,6 +54,7 @@ parser.add_argument('--experiment-name', type=str, help='name of experiment in w
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
 parser.add_argument('--word2vec', action='store_true')
 parser.add_argument("--track_nodes", nargs="*", type=str, help="nodes to keep track of")
+parser.add_argument("--train-word2vec", action='store_true', help="fit model to pretrained weights")
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -149,7 +150,8 @@ elif args.path_resume:
 
 
 if args.word2vec:
-    net = word2vec_model(net, trainset)
+    net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset)
+
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
@@ -191,6 +193,11 @@ def train(epoch, analyzer):
         outputs = net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
+        # Freeze rows of the last FC layer that correspond with the ZS classes
+        # TODO: optimize this with backward hook
+        # if args.exclude_classes:
+        #     for cls in args.exclude_classes:
+        #         net.module.linear.weight.grad[trainset.classes.index(cls)] = 0
         optimizer.step()
 
         train_loss += loss.item()
@@ -276,10 +283,10 @@ if args.ood_dataset:
 
 analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
+if args.ood_dataset:
+    args.oodset = ood_set
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
-if args.ood_dataset:
-    analyzer_kwargs['oodset'] = ood_set
 analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
 
 

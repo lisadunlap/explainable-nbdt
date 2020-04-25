@@ -8,11 +8,13 @@ import sys
 import time
 import math
 import numpy as np
+from numpy import linalg as LA
 
 import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torchvision.transforms as transforms
+from gensim.models import Word2Vec
 
 from pathlib import Path
 
@@ -78,6 +80,33 @@ DATASET_TO_PATHS = {
     }
 }
 
+WORD2VEC_NAMES_TO_MODEL = {
+    'wiki': {
+        'name': 'glove-wiki-gigaword-300',
+        'dim': 300
+    },
+    'wiki-300': {
+        'name': 'glove-wiki-gigaword-300',
+        'dim': 300
+    },
+    'wiki-200': {
+        'name': 'glove-wiki-gigaword-200',
+        'dim': 200
+    },
+    'wiki-100': {
+        'name': 'glove-wiki-gigaword-100',
+        'dim': 100
+    },
+    'wiki-50': {
+        'name': 'glove-wiki-gigaword-50',
+        'dim': 50
+    },
+
+    'twitter': {
+        'name': 'glove-twitter-200',
+        'dim': 200
+    }
+}
 
 def populate_kwargs(args, kwargs, object, name='Dataset', keys=(), globals={}):
     for key in keys:
@@ -275,7 +304,7 @@ def generate_fname(dataset, model, path_graph, wnid=None, name='',
         include_classes=(), num_samples=0, max_leaves_supervised=-1,
         min_leaves_supervised=-1, tree_supervision_weight=0.5,
         weighted_average=False, fine_tune=False,
-        loss='CrossEntropyLoss', **kwargs):
+        loss='CrossEntropyLoss', word2vec=False, **kwargs):
     fname = 'ckpt'
     fname += '-' + dataset
     fname += '-' + model
@@ -305,28 +334,74 @@ def generate_fname(dataset, model, path_graph, wnid=None, name='',
             fname += f'-tsw{tree_supervision_weight}'
         if weighted_average:
             fname += '-weighted'
+    if word2vec:
+        fname += '-word2vec'
     return fname
 
-def word2vec_model(net, trainset, added=False):
-    import gensim
-    from gensim.models import Word2Vec
-    import gensim.downloader as api
+def get_saved_word2vec(path, dimension, projection_matrix):
+    word_vec = np.load(path)
+    word_vec = np.asarray(word_vec).reshape(1, dimension)
+    word_vec = np.matmul(word_vec, projection_matrix)[0]
+    return np.array(word_vec / LA.norm(word_vec), dtype=float)
+
+def word2vec_model(net, trainset, dataset_name='CIFAR10', exclude_classes=None, dimension=300):
+    """ Sets FC layer weights to word2vec embeddings, freezing them unless
+    exclude classes is given, in which case those specific rows are frozen in
+    the backward call"""
+
+    print('==> Adding in word2vec embeddings...')
+    word2vec_path = os.path.join(os.path.join(trainset.root,DATASET_TO_FOLDER_NAME[dataset_name]), "word2vec/")
+    if not os.path.exists(word2vec_path):
+        raise Exception("No saved word2vec embeddings, run generate_word2vec.py")
 
     fc_weights = []
+    # get saved embeddings and projection matrix
     try:
-        model = Word2Vec.load("./data/wiki.en.word2vec.model")
+        projection_matrix = np.load('./data/projection.npy')
     except:
-        print("Word2Vec model not found")
+        print('==> saving projection matrix')
+        projection_matrix = np.random.rand(dimension, 512)
+        np.save('./data/projection.npy', projection_matrix)
+
     for i, cls in enumerate(trainset.classes):
-        word_vec = model.wv[cls]
-        fc_weights = np.append(fc_weights, np.array(word_vec, dtype=float))
-    print("FC weight shape: ",np.array(fc_weights).shape)
-    fc_weights = fc_weights.reshape((len(trainset.classes),512))
-    print("new FC weight shape: ",np.array(fc_weights).shape)
-    for i, cls in enumerate(trainset.classes):
-        assert all(fc_weights[i] == model.wv[cls])
+        word_vec = get_saved_word2vec(word2vec_path+cls+'.npy', dimension, projection_matrix)
+        fc_weights = np.append(fc_weights, word_vec)
+    fc_weights = fc_weights.reshape((len(trainset.classes), 512))
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
-    net.module.linear.weight.requires_grad = False
-    net.module.linear.bias.requires_grad = False
+    # test_word2vec(net, trainset, dataset_name, exclude_classes, dimension)
+    # Colors.cyan("All word2vec checks passed!")
+
+    # freeze layer
+    if not exclude_classes:
+        net.module.linear.weight.requires_grad = False
+        net.module.linear.bias.requires_grad = False
+        net.module.linear.requires_grad = False
+        Colors.cyan("Freezing FC weights..")
     return net
+
+def test_word2vec(net, trainset, dataset_name='CIFAR10', exclude_classes=None, dimension=300):
+    """ Check that word2vec weights are frozen in ZS rows """
+    word2vec_path = os.path.join(os.path.join(trainset.root, DATASET_TO_FOLDER_NAME[dataset_name]), "word2vec/")
+    if not os.path.exists(word2vec_path):
+        raise Exception("No saved word2vec embeddings, run generate_word2vec.py")
+
+    net.eval()
+    try:
+        projection_matrix = np.load('./data/projection.npy')
+    except:
+        raise Exception("Can't find projection matrix")
+
+    # get FC weights
+    fc_weights = net.module.linear.weight.detach().cpu().numpy()
+
+    # if no exclude classes, all FC rows should be word2vec embeddings
+    if not exclude_classes:
+        for i, cls in enumerate(trainset.classes):
+            word_vec = get_saved_word2vec(word2vec_path+cls+'.npy', dimension, projection_matrix)
+            assert all(fc_weights[i] == word_vec)
+    else:
+        for i, cls in enumerate(exclude_classes):
+            word_vec = get_saved_word2vec(word2vec_path+cls+'.npy', dimension, projection_matrix)
+            assert all(fc_weights[i] == word_vec)
+    Colors.cyan("Freezing certain FC rows check passed!")
