@@ -19,9 +19,10 @@ import models
 
 from PIL import Image, ImageOps
 from PIL.ImageColor import getcolor
+from numpy import linalg as LA
 
 from nbdt.utils import (
-    generate_fname, populate_kwargs, Colors, get_saved_word2vec, DATASET_TO_FOLDER_NAME
+    generate_fname, populate_kwargs, Colors, get_saved_word2vec, DATASET_TO_FOLDER_NAME, get_word_embedding
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
@@ -47,6 +48,9 @@ parser.add_argument('--experiment-name', type=str, help='name of experiment in w
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
 parser.add_argument('--word2vec', action='store_true')
 parser.add_argument('--dimension', type=int, default=300, help='dimension of word2vec embeddings')
+parser.add_argument('--num-samples', type=int, default=1)
+parser.add_argument('--replace', action='store_true', help='replace the fc rows')
+
 
 data.custom.add_arguments(parser)
 
@@ -85,7 +89,10 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 # Model
 print('==> Building model..')
 model = getattr(models, args.model)
-model_kwargs = {'num_classes': len(testset.classes) - len(args.new_classes)}
+if args.replace:
+    model_kwargs = {'num_classes': len(testset.classes)}
+else:
+    model_kwargs = {'num_classes': len(testset.classes) - len(args.new_classes)}
 
 if args.pretrained:
     try:
@@ -125,7 +132,7 @@ if args.resume:
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
 # get one sample of each zeroshot class, and get its output at linear layer
-cls_to_vec = {cls: None for cls in args.new_classes}
+cls_to_vec = {cls: [] for cls in args.new_classes}
 hooked_inputs = None
 
 def testhook(self, input, output):
@@ -139,35 +146,44 @@ net.eval()
 
 # load projection matrix
 if args.word2vec:
-    try:
-        projection_matrix = np.load('./data/projection.npy')
-    except:
-        projection_matrix = np.random.rand(args.dimension, 512)
-        np.save('./data/projection.npy', projection_matrix)
     word2vec_path = os.path.join(os.path.join(trainset.root, DATASET_TO_FOLDER_NAME[args.dataset]), "word2vec/")
 
+num_samples = 0
 with torch.no_grad():
-    for _, (inputs, labels) in enumerate(trainloader):
+    for i, (inputs, labels) in enumerate(trainloader):
         net(inputs)
 
-        done = True
+        done = False
         for vec, label in zip(hooked_inputs, labels):
             cls_name = trainset.classes[label]
-            if cls_name in cls_to_vec and cls_to_vec[cls_name] is None:
-                done = False
+            # if cls_name in cls_to_vec and cls_to_vec[cls_name] is None:
+            if cls_name in cls_to_vec and len(cls_to_vec[cls_name]) < args.num_samples:
+                if num_samples >= args.num_samples:
+                    done = True
+                    break
                 if args.word2vec:
                     word_vec = get_saved_word2vec(word2vec_path + cls_name + '.npy', args.dimension, projection_matrix)
                     cls_to_vec[cls_name] = word_vec
                 else:
-                    cls_to_vec[cls_name] = vec[0]
+                    cls_to_vec[cls_name].append(vec)
+                num_samples = min([len(cls_to_vec[c]) for c in cls_to_vec])
         if done:
             break
+
+    for cls in cls_to_vec:
+        cls_to_vec[cls] = np.average(np.array(cls_to_vec[cls]), axis=0)
+        cls_to_vec[cls] /= LA.norm(cls_to_vec[cls])
 
     # insert vectors into linear layer for model
     fc_weights = net.module.linear.weight.cpu().numpy()
     for i, cls in enumerate(trainset.classes):
         if cls in cls_to_vec:
-            fc_weights = np.insert(fc_weights, i, cls_to_vec[cls], axis=0)
+            if args.replace:
+                fc_weights[i] = cls_to_vec[cls]
+            else:
+                fc_weights = np.insert(fc_weights, i, cls_to_vec[cls], axis=0)
+        # else:
+        #     assert all(fc_weights[i] == get_word_embedding(cls, trainset, args.dataset))
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes))
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights))
 
