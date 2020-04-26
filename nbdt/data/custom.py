@@ -756,7 +756,10 @@ class FewShotLabelsDataset(Dataset):
                 new_to_old.append(old)
             else:
                 if self.fewshot_nsamples == -1 or fewshot_class_nsamples[label] < self.fewshot_nsamples:
-                    new_to_old.append(np.random.choice(self.fewshot_gt[label]))
+                    if fewshot_class_nsamples[label] < self.fewshot_gt_nsamples:
+                        new_to_old.append(self.fewshot_gt[label][fewshot_class_nsamples[label]])
+                    else:
+                        new_to_old.append(np.random.choice(self.fewshot_gt[label]))
 
         return new_to_old
 
