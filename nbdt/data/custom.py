@@ -35,7 +35,7 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'Imagenet1000ResampleLabels', 'CIFAR10CombineClasses',
                    'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
                    'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM',)
-keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes')
+keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes', 'exclude_classes')
 
 
 def add_arguments(parser):
@@ -73,7 +73,7 @@ class Node:
         self.path_wnids_ood = path_wnids_ood
 
         self.wnid = wnid
-        self.wnids = get_wnids(path_wnids, path_wnids_ood)
+        self.wnids = get_wnids(path_wnids)
         self.G = read_graph(path_graph)
 
         self.original_classes = classes

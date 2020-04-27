@@ -8,18 +8,20 @@ import sys
 import time
 import math
 import numpy as np
+from numpy import linalg as LA
 
 import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torchvision.transforms as transforms
+from gensim.models import Word2Vec
 
 from pathlib import Path
 
 # tree-generation consntants
 METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node', 'induced-attributes')
 DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000',
-            'TinyImagenet200CombineClasses', 'MiniPlaces', 'AnimalsWithAttributes2')
+            'TinyImagenet200CombineClasses', 'MiniPlaces', 'AnimalsWithAttributes2', 'CUB2011')
 
 DATASET_TO_FOLDER_NAME = {
     'CIFAR10': 'CIFAR10',
@@ -31,7 +33,8 @@ DATASET_TO_FOLDER_NAME = {
     'Imagenet1000' : 'imagenet-1000',
     'TinyImagenet200CombineClasses': 'tiny-imagenet-200-custom-combined',
     'MiniPlaces': 'miniplaces',
-    'AnimalsWithAttributes2': 'awa2'
+    'AnimalsWithAttributes2': 'awa2',
+    'CUB2011': 'CUB_200_2011'
 }
 
 # main script constants
@@ -49,6 +52,8 @@ DEFAULT_MINIPLACES_TREE = '/data/miniplaces/graph-default.json'
 DEFAULT_MINIPLACES_WNID = './data/miniplaces/wnids.txt'
 DEFAULT_AWA2_TREE = '/data/awa2/graph-default.json'
 DEFAULT_AWA2_WNID = './data/awa2/wnids.txt'
+DEFAULT_CUB_TREE = '/data/CUB_200_2011/graph-default.json'
+DEFAULT_CUB_WNID = './data/CUB_200_2011/wnids.txt'
 
 
 DATASET_TO_PATHS = {
@@ -75,9 +80,40 @@ DATASET_TO_PATHS = {
     'AnimalsWithAttributes2': {
         'path_graph': DEFAULT_AWA2_TREE,
         'path_wnids': DEFAULT_AWA2_WNID
+    },
+    'CUB2011': {
+        'path_graph': DEFAULT_CUB_TREE,
+        'path_wnids': DEFAULT_CUB_WNID
     }
 }
 
+WORD2VEC_NAMES_TO_MODEL = {
+    'wiki': {
+        'name': 'glove-wiki-gigaword-300',
+        'dim': 300
+    },
+    'wiki-300': {
+        'name': 'glove-wiki-gigaword-300',
+        'dim': 300
+    },
+    'wiki-200': {
+        'name': 'glove-wiki-gigaword-200',
+        'dim': 200
+    },
+    'wiki-100': {
+        'name': 'glove-wiki-gigaword-100',
+        'dim': 100
+    },
+    'wiki-50': {
+        'name': 'glove-wiki-gigaword-50',
+        'dim': 50
+    },
+
+    'twitter': {
+        'name': 'glove-twitter-200',
+        'dim': 200
+    }
+}
 
 def populate_kwargs(args, kwargs, object, name='Dataset', keys=(), globals={}):
     for key in keys:
@@ -113,7 +149,7 @@ def get_transform_from_name(dataset_name, dataset, input_size):
     ])
 
     # , 'TinyImagenet200IncludeClasses'
-    if dataset_name in ('TinyImagenet200', 'Imagenet1000'):
+    if dataset_name in ('TinyImagenet200', 'Imagenet1000', 'CUB2011'):
         default_input_size = 64 if 'TinyImagenet200' in dataset_name else 224
         input_size = input_size or default_input_size
         transform_train = dataset.transform_train(input_size)
@@ -276,7 +312,7 @@ def generate_fname(dataset, model, path_graph, wnid=None, name='',
         include_classes=(), num_samples=0, max_leaves_supervised=-1,
         min_leaves_supervised=-1, tree_supervision_weight=0.5,
         weighted_average=False, fine_tune=False,
-        loss='CrossEntropyLoss', **kwargs):
+        loss='CrossEntropyLoss', word2vec=False, **kwargs):
     fname = 'ckpt'
     fname += '-' + dataset
     fname += '-' + model
@@ -306,28 +342,112 @@ def generate_fname(dataset, model, path_graph, wnid=None, name='',
             fname += f'-tsw{tree_supervision_weight}'
         if weighted_average:
             fname += '-weighted'
+    if word2vec:
+        fname += '-word2vec'
     return fname
 
-def word2vec_model(net, trainset, added=False):
-    import gensim
-    from gensim.models import Word2Vec
-    import gensim.downloader as api
+def get_saved_word2vec(path, dimension, projection_matrix):
+    word_vec = np.load(path)
+    word_vec = np.asarray(word_vec).reshape(1, dimension)
+    word_vec = np.matmul(word_vec, projection_matrix)[0]
+    return np.array(word_vec / LA.norm(word_vec), dtype=float)
 
+def get_word_embedding(cls, trainset, dataset_name='CIFAR10'):
+    word2vec_path = os.path.join(os.path.join(trainset.root, DATASET_TO_FOLDER_NAME[dataset_name]), "word2vec/")
+    word_vec = np.load(word2vec_path + cls + '.npy')
+    return word_vec/LA.norm(word_vec)
+
+
+def word2vec_model(net, trainset, dataset_name='CIFAR10', exclude_classes=None, dimension=300):
+    """ Sets FC layer weights to word2vec embeddings, freezing them unless
+    exclude classes is given, in which case those specific rows are frozen in
+    the backward call"""
+
+    print('==> Adding in word2vec embeddings...')
+    word2vec_path = os.path.join(os.path.join('./data',DATASET_TO_FOLDER_NAME[dataset_name]), "word2vec/")
+    if not os.path.exists(word2vec_path):
+        raise Exception("No saved word2vec embeddings, run generate_word2vec.py")
     fc_weights = []
-    try:
-        model = Word2Vec.load("./data/wiki.en.word2vec.model")
-    except:
-        print("Word2Vec model not found")
+
     for i, cls in enumerate(trainset.classes):
-        word_vec = model.wv[cls]
-        fc_weights = np.append(fc_weights, np.array(word_vec, dtype=float))
-    print("FC weight shape: ",np.array(fc_weights).shape)
-    fc_weights = fc_weights.reshape((len(trainset.classes),512))
-    print("new FC weight shape: ",np.array(fc_weights).shape)
-    for i, cls in enumerate(trainset.classes):
-        assert all(fc_weights[i] == model.wv[cls])
+        word_vec = np.load(word2vec_path+cls+'.npy')
+        word_vec /= LA.norm(word_vec)
+        fc_weights = np.append(fc_weights, word_vec)
+    fc_weights = fc_weights.reshape((len(trainset.classes), 512))
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
+    # test_word2vec(net, trainset, dataset_name, exclude_classes, dimension)
+    # Colors.cyan("All word2vec checks passed!")
+
+    # freeze layer
     net.module.linear.weight.requires_grad = False
     net.module.linear.bias.requires_grad = False
+    net.module.linear.requires_grad = False
+    Colors.cyan("Freezing FC weights..")
     return net
+
+def test_word2vec(net, trainset, dataset_name='CIFAR10', exclude_classes=None, dimension=300):
+    """ Check that word2vec weights are frozen in ZS rows """
+    word2vec_path = os.path.join(os.path.join('./data', DATASET_TO_FOLDER_NAME[dataset_name]), "word2vec/")
+    if not os.path.exists(word2vec_path):
+        raise Exception("No saved word2vec embeddings, run generate_word2vec.py")
+
+    net.eval()
+
+    # get FC weights
+    fc_weights = net.module.linear.weight.detach().cpu().numpy()
+
+    # if no exclude classes, all FC rows should be word2vec embeddings
+    if not exclude_classes:
+        for i, cls in enumerate(trainset.classes):
+            word_vec = word_vec = np.load(word2vec_path+cls+'.npy')
+            assert all(fc_weights[i] == word_vec)
+    else:
+        for i, cls in enumerate(exclude_classes):
+            word_vec = word_vec = np.load(word2vec_path+cls+'.npy')
+            assert all(fc_weights[i] == word_vec)
+    Colors.cyan("Freezing certain FC rows check passed!")
+
+class LabelSmoothingLoss(nn.Module):
+    def __init__(self, classes, smoothing=0.0, dim=-1):
+        super(LabelSmoothingLoss, self).__init__()
+        self.confidence = 1.0 - smoothing
+        self.smoothing = smoothing
+        self.cls = classes
+        self.dim = dim
+
+    def forward(self, pred, target):
+        pred = pred.log_softmax(dim=self.dim)
+        with torch.no_grad():
+            # true_dist = pred.data.clone()
+            true_dist = torch.zeros_like(pred)
+            true_dist.fill_(self.smoothing / (self.cls - 1))
+            true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
+        return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
+
+def smooth_one_hot(true_labels: torch.Tensor, classes: int, smoothing=0.0):
+    """
+    if smoothing == 0, it's one-hot method
+    if 0 < smoothing < 1, it's smooth method
+
+    How to use:
+    Loss = CrossEntropyLoss(NonSparse=True, ...)
+    . . .
+    data = ...
+    labels = ...
+
+    outputs = model(data)
+
+    smooth_label = smooth_one_hot(labels, ...)
+    loss = (outputs, smooth_label)
+    ...
+
+    """
+    assert 0 <= smoothing < 1
+    confidence = 1.0 - smoothing
+    label_shape = torch.Size((true_labels.size(0), classes))
+    with torch.no_grad():
+        true_dist = torch.empty(size=label_shape, device=true_labels.device)
+        true_dist.fill_(smoothing / (classes - 1))
+        true_dist.scatter_(1, true_labels.data.unsqueeze(1), confidence)
+    return true_dist

@@ -15,7 +15,7 @@ import wandb
 import models
 from nbdt.utils import (
     progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors, word2vec_model,
-    get_transform_from_name,
+    get_transform_from_name, test_word2vec
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.awa2.names + data.cub.names + data.miniplaces.names
@@ -27,7 +27,7 @@ parser.add_argument('--batch-size', default=512, type=int,
 parser.add_argument('--epochs', '-e', default=200, type=int,
                     help='By default, lr schedule is scaled accordingly')
 parser.add_argument('--dataset', default='CIFAR10', choices=datasets)
-parser.add_argument('--model', default='ResNet18', choices=list(models.get_model_choices()))
+parser.add_argument('--model', default='ResNet10', choices=list(models.get_model_choices()))
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--ood-dataset', choices=datasets, help='dataset to use for out of distribution images')
@@ -54,6 +54,9 @@ parser.add_argument('--experiment-name', type=str, help='name of experiment in w
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
 parser.add_argument('--word2vec', action='store_true')
 parser.add_argument("--track_nodes", nargs="*", type=str, help="nodes to keep track of")
+parser.add_argument("--train-word2vec", action='store_true', help="fit model to pretrained weights")
+parser.add_argument('--freeze-classes',  nargs="*", type=str, help="classes whose FC weights should freeze")
+parser.add_argument('--weight-decay', type=float, default=5e-4)
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -149,14 +152,15 @@ elif args.path_resume:
 
 
 if args.word2vec:
-    net = word2vec_model(net, trainset)
+    net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset)
+
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
     keys=loss.keys, globals=globals())
 criterion = class_criterion(**loss_kwargs)
 
-optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
 
 def adjust_learning_rate(epoch, lr):
     if epoch <= 150 / 350. * args.epochs:  # 32k iterations
@@ -193,6 +197,11 @@ def train(epoch, analyzer):
         outputs = net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
+        # Freeze rows of the last FC layer that correspond with the ZS classes
+        # TODO: optimize this with backward hook
+        # if args.exclude_classes:
+        #     for cls in args.exclude_classes:
+        #         net.module.linear.weight.grad[trainset.classes.index(cls)] = 0
         optimizer.step()
 
         train_loss += loss.item()
@@ -280,10 +289,10 @@ if args.ood_dataset:
 
 analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
+if args.ood_dataset:
+    args.oodset = ood_set
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
-if args.ood_dataset:
-    analyzer_kwargs['oodset'] = ood_set
 analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
 
 

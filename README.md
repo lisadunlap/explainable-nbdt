@@ -256,6 +256,14 @@ python modify_tree.py --json-path=./data/CIFAR10/graph-induced-wrn28_10_cifar10.
 
 To log results on weights and biases (which is strongly recommended), you must first create an account and run your command (either training, inference, or analysis), with the `--wandb` flag. The first time you run it you will be prompted to enter your api key.
 
+## Generating Word2Vec Embeddings for Zeroshot/Fewshot training
+
+To use word2vec embeddings, call `generate_word2vec.py` to generate and store Word2vec embeddings for your dataset before training. Since the model is pretrained, run `pip install gensim` if it is not installed
+
+Example:
+```
+python generate_word2vec.py --dataset CIFAR10
+```
 
 ## Zero Shot CIFAR10
 
@@ -290,7 +298,7 @@ python main.py --dataset=CIFAR10 --model=ResNet10 --induced-checkpoint=./checkpo
 ```
 
 ## Integrating a secondary OOD Dataset
-Currently, this process is slightly annoying because you will have to create a new `wnids.txt` file for each set of OOD classes you want to test (e.g. by using the `HardFullTreePrior` class with the OOD parameters). For example, the following code trains a model on a dataset with images from `CIFAR10 - {cat, train}`, then feeds in images of `cat` and `train` as the OOD dataset.
+Currently, this process is slightly annoying because you will have to create a new `wnids.txt` file for each set of OOD classes you want to test (e.g. by using the `SoftFullTreeOODPrior` class with the OOD parameters). For example, the following code trains a model on a dataset with images from `CIFAR10 - {cat, train}`, then feeds in images of `cat` and `train` as the OOD dataset.
 *Note:* When listing out classes in parameters below, if you run into any errors, try alphabetizing the class names you pass in (this issue seems to come up every now and then).
 ```
 # Train model
@@ -307,7 +315,7 @@ python main.py \
   --dataset=CIFAR10IncludeClasses --include-classes "airplane" "automobile" "bird" "deer" "dog" "frog" "horse" "ship" # list all classes in training set \
   --model=ResNet10 --path-resume=... --eval --resume --wandb \
   --path-graph=... --path-graph-analysis=... --path-wnids=... # use generated files above \
-  --analysis=HardFullTreePrior --ood-dataset=CIFAR10IncludeClasses --ood-classes "cat" "truck" # include OOD classes here
+  --analysis=SoftFullTreeOODPrior --ood-dataset=CIFAR10IncludeClasses --ood-classes "cat" "truck" # include OOD classes here
   --ood-path-wnids=... # path to wnids.txt for the OOD classes listed in line above \
 ```
 
