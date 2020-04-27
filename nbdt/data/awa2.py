@@ -11,10 +11,11 @@ __all__ = names = ('AnimalsWithAttributes2',)
 class AnimalsWithAttributes2(Dataset): 
     train_ratio = 0.8
 
-    def __init__(self, root, transform, train=True, download=False, shuffle=False, binary=True, **kwargs):
+    def __init__(self, root, transform=None, train=True, download=False, shuffle=False, binary=True, zeroshot=False,
+                 ignore_zeroshot_classes=True, **kwargs):
         # load in the data, we ignore test case, only train/val
         self.root = os.path.join(root, 'awa2')
-        labels_fname = 'trainclasses.txt' if train else 'testclasses.txt'
+        labels_fname = 'trainclasses.txt' if not zeroshot else 'testclasses.txt'
         matrix_fname = 'predicate-matrix-binary.txt' if binary else 'predicate-matrix-continuous.txt'
 
         self.photos_path = os.path.join(self.root, 'JPEGImages')
@@ -23,6 +24,9 @@ class AnimalsWithAttributes2(Dataset):
         self.predicates_path = os.path.join(self.root, 'predicates.txt')
         self.predicates_matrix_path = os.path.join(self.root, matrix_fname)
 
+        self.ignore_zeroshot_classes = ignore_zeroshot_classes
+        self.zeroshot = zeroshot
+        self.train = train
         self.shuffle = shuffle
         self.transform = transform
         self.load_size = 224
@@ -31,7 +35,7 @@ class AnimalsWithAttributes2(Dataset):
         self.classes = []
         self.use_classes = []
         self.predicates = []
-        self.class_predicates = []
+        self.attributes = []
 
         if download:
             # TODO check if file already exists, otherwise download
@@ -42,6 +46,15 @@ class AnimalsWithAttributes2(Dataset):
                 _, cls = line.strip().split('\t')
                 self.classes.append(cls)
 
+        # assuming that file hierarchy is {train/val}/{first letter}/{class}/{fname}.xml
+        with open(self.labels_path, 'r') as f: 
+            for i, line in enumerate(f):
+                label = line.strip()
+                self.use_classes.append(label)
+
+        if self.ignore_zeroshot_classes == True:
+            self.classes = self.use_classes
+
         with open(self.predicates_path, 'r') as f:
             for i, line in enumerate(f):
                 _, predicate = line.strip().split('\t')
@@ -50,15 +63,10 @@ class AnimalsWithAttributes2(Dataset):
         with open(self.predicates_matrix_path, 'r') as f:
             for i, line in enumerate(f):
                 predicates = line.strip().split(' ')
-                self.class_predicates.append(predicates)
+                self.attributes.append(predicates)
 
-        # assuming that file hierarchy is {train/val}/{first letter}/{class}/{fname}.xml
-        with open(self.labels_path, 'r') as f: 
-            for i, line in enumerate(f):
-                label = line.strip()
-                self.use_classes.append(label)
 
-        np.random.set_state(42)
+        np.random.seed(42)
         for image_folder in os.listdir(self.photos_path):
             if image_folder in self.use_classes:
                 label = self.classes.index(image_folder)
@@ -71,8 +79,7 @@ class AnimalsWithAttributes2(Dataset):
                 else:
                     new_image_paths = new_image_paths[n_train:]
                 self.images.extend(new_image_paths)
-                self.labels.extend([label] * len(new_image_paths))
-            
+                self.labels.extend([label] * len(new_image_paths))            
 
         if self.shuffle:
             state = np.random.get_state()
@@ -94,10 +101,11 @@ class AnimalsWithAttributes2(Dataset):
 
     def __getitem__(self, idx): 
         image = Image.open(self.images[idx])
-        image = self.transform(image)
+        if self.transform is not None:
+            image = self.transform(image)
         # label is the index of the correct category
         label = self.labels[idx]
-        predicates = self.class_predicates[label]
+        predicates = self.attributes[label]
         return (image, predicates), label
 
     def setup_custom_wnids(self, root):
