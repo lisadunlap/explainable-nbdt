@@ -294,7 +294,7 @@ class SingleInference(HardEmbeddedDecisionRules):
         print("inference: ", predicted)
 
 class HardFullTreePrior(Noop):
-    accepts_path_graph_analysis = True
+    accepts_path_graph = True
     accepts_path_wnids = True
     accepts_json_save_path = True
     accepts_weighted_average = True
@@ -302,13 +302,13 @@ class HardFullTreePrior(Noop):
 
     """Evaluates model on a decision tree prior. Evaluation is deterministic."""
     """Evaluates on entire tree, tracks all paths."""
-    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, ignore_labels=[],
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, ignore_labels=[],
                  json_save_path='./out/full_tree_analysis/', csv_save_path='./out/cifar100.csv',
                  weighted_average=False, use_wandb=False, run_name="HardFullTreePrior"):
         super().__init__(trainset, testset, experiment_name, use_wandb, run_name=run_name)
         # weird, sometimes self.classes are wnids, and sometimes they are direct classes.
         # just gotta do a check. Its basically CIFAR vs wordnet
-        self.nodes = Node.get_nodes(path_graph_analysis, path_wnids, trainset.classes)
+        self.nodes = Node.get_nodes(path_graph, path_wnids, trainset.classes)
         self.G = self.nodes[0].G
         self.wnid_to_node = {node.wnid: node for node in self.nodes}
         self.ignore_labels = ignore_labels
@@ -333,6 +333,8 @@ class HardFullTreePrior(Noop):
             os.mkdir(self.json_save_path)
 
         self.class_to_wnid = {self.wnid_to_class[wnid]:wnid for wnid in self.wnids}
+        self.class_accuracies = {c: 0 for c in self.classes}
+        self.class_totals = {c: 0 for c in self.classes}
 
     def update_batch(self, outputs, predicted, targets):
         wnid_to_pred_selector = {}
@@ -349,6 +351,10 @@ class HardFullTreePrior(Noop):
         for cls, leaf in zip(targets.numpy(), paths):
             self.leaf_counts[self.classes[cls]][leaf] += 1
             self.class_counts[self.classes[cls]] += 1
+
+        for i in range(len(predicted)):
+            self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
+            self.class_totals[self.classes[targets[i]]] += 1
 
         predicted = [self.classes.index(self.wnid_to_class[wnid]) for wnid in paths]
         self.correct += np.sum((predicted == targets.numpy()))
@@ -380,6 +386,11 @@ class HardFullTreePrior(Noop):
         if self.csv_save_path is not None or self.use_wandb:
             self.write_to_csv(self.csv_save_path)
         self.write_to_json(self.json_save_path)
+        if self.use_wandb:
+            for cls in self.class_accuracies:
+                label = cls+"-acc"
+                wandb.run.summary[label] = self.class_accuracies[cls]
+        print(self.class_accuracies)
 
     def write_to_csv(self, path):
         columns = {node:[] for node in get_leaves(self.G)}
@@ -400,8 +411,6 @@ class HardFullTreePrior(Noop):
             index = [cls for cls in classes_to_count]
         df = pd.DataFrame(data=new_columns, index=index)
         df.to_csv(path)
-        if self.use_wandb:
-            wandb.log({"examples": wandb.Table(data=new_columns, columns=df.columns.to_numpy())})
         print("CSV saved to %s" % path)
 
     def write_to_json(self, path):
@@ -437,7 +446,6 @@ class HardFullTreePrior(Noop):
 
 
 class HardTrackNodes(HardFullTreePrior):
-    accepts_path_graph_analysis = True
     accepts_path_wnids = True
     accepts_weighted_average = True
     accepts_track_nodes = True
@@ -446,10 +454,10 @@ class HardTrackNodes(HardFullTreePrior):
     """Evaluates on entire tree, tracks all paths. Additionally, tracks which images
         go to each node by retaining their index numbers. Stores this into a json.
         Note: only works if dataloader for evaluation is NOT shuffled."""
-    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, track_nodes,
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, track_nodes,
         json_save_path='./out/hard_track_nodes_analysis/', csv_save_path='./out/hard_track_nodes_analysis.csv', weighted_average=False,
         use_wandb=False, run_name="HardTrackNodes"):
-        super().__init__(trainset, testset, experiment_name, path_graph_analysis, path_wnids, json_save_path,
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, json_save_path,
                          csv_save_path, weighted_average, use_wandb, run_name)
         self.track_nodes = {wnid:[] for wnid in track_nodes}
 
@@ -474,9 +482,6 @@ class HardTrackNodes(HardFullTreePrior):
                     self.node_counts[self.classes[target_classes[index]]][wnid] += 1
             leaf_wnids.append(wnid)
         return leaf_wnids
-
-    def end_test(self, epoch):
-        self.write_to_json(self.json_save_path)
 
     def write_to_json(self, path):
         # create separate graph for each node
@@ -505,10 +510,10 @@ class SoftFullTreePrior(HardFullTreePrior):
     """Evaluates model on a decision tree prior. Evaluation is soft.
      """
 
-    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, ignore_labels=[],
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, ignore_labels=[],
                  json_save_path='./out/full_tree_analysis/', csv_save_path='./out/cifar100.csv',
                  weighted_average=False, use_wandb=False, run_name="SoftFullTreePrior"):
-        super().__init__(trainset, testset, experiment_name, path_graph_analysis, path_wnids, ignore_labels,
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, ignore_labels,
                  json_save_path, csv_save_path, weighted_average, use_wandb, run_name)
         self.num_classes = len(trainset.classes)
         get_path = lambda wnid: nx.shortest_path(self.G, source=get_root(self.G), target=wnid)
@@ -524,6 +529,10 @@ class SoftFullTreePrior(HardFullTreePrior):
         for cls, leaf in zip(targets.numpy(), paths):
             self.leaf_counts[self.classes[cls]][leaf] += 1
             self.class_counts[self.classes[cls]] += 1
+
+        for i in range(len(predicted)):
+            self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
+            self.class_totals[self.classes[targets[i]]] += 1
 
         predicted = [self.classes.index(self.wnid_to_class[wnid]) for wnid in paths]
         self.correct += np.sum((predicted == targets.numpy()))
@@ -547,7 +556,7 @@ class SoftFullTreeOODPrior(SoftFullTreePrior):
 
     """Evaluates model on a decision tree prior. Evaluation is soft.
      """
-    accepts_path_graph_analysis = True
+    accepts_path_graph = True
     accepts_path_wnids = True
     accepts_json_save_path = True
     accepts_weighted_average = True
@@ -556,7 +565,7 @@ class SoftFullTreeOODPrior(SoftFullTreePrior):
     accepts_oodset = True
     accepts_ood_path_wnids = True
 
-    def __init__(self, trainset, testset, experiment_name, path_graph_analysis, path_wnids, 
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
                  oodset, ood_path_wnids, ignore_labels=[],
                  json_save_path='./out/soft_full_tree_analysis/', csv_save_path='./out/cifar100.csv',
                  weighted_average=False, use_wandb=False, run_name="SoftFullTreeOODPrior"):
@@ -567,7 +576,7 @@ class SoftFullTreeOODPrior(SoftFullTreePrior):
         if not os.path.exists(self.json_save_path):
             os.mkdir(self.json_save_path)
 
-        self.nodes = Node.get_nodes(path_graph_analysis, path_wnids, trainset.classes, ood_path_wnids)
+        self.nodes = Node.get_nodes(path_graph, path_wnids, trainset.classes, ood_path_wnids)
         self.G = self.nodes[0].G
         self.wnid_to_node = {node.wnid: node for node in self.nodes}
 
@@ -638,8 +647,6 @@ class SoftFullTreeOODPrior(SoftFullTreePrior):
             index = [cls for cls in self.ood_classes]
         df = pd.DataFrame(data=new_columns, index=index)
         df.to_csv(path)
-        if self.use_wandb:
-            wandb.log({"examples": wandb.Table(data=new_columns, columns=df.columns.to_numpy())})
         print("CSV saved to %s" % path)
 
     def write_to_json(self, path):

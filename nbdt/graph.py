@@ -103,17 +103,13 @@ def get_directory(dataset, root='./data'):
 
 def get_wnids_from_dataset(dataset, root='./data', path_wnids_ood=None):
     directory = get_directory(dataset, root)
-    return get_wnids(os.path.join(directory, 'wnids.txt'), path_wnids_ood)
+    return get_wnids(os.path.join(directory, 'wnids.txt'))
 
 
-def get_wnids(path_wnids, path_wnids_ood=None):
+def get_wnids(path_wnids):
     with open(path_wnids) as f:
-        wnids = set([wnid.strip() for wnid in f.readlines()])
-    if path_wnids_ood:
-        with open(path_wnids_ood) as f:
-            wnids_ood = set([wnid.strip() for wnid in f.readlines()])
-            wnids = wnids - wnids_ood
-    return list(wnids)
+        wnids = [wnid.strip() for wnid in f.readlines()]
+    return wnids
 
 
 def get_graph_path_from_args(args):

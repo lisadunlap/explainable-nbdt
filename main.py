@@ -18,7 +18,7 @@ from nbdt.utils import (
     get_transform_from_name, test_word2vec
 )
 
-datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
+datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.cub.names + data.awa2.names
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
@@ -27,7 +27,7 @@ parser.add_argument('--batch-size', default=512, type=int,
 parser.add_argument('--epochs', '-e', default=200, type=int,
                     help='By default, lr schedule is scaled accordingly')
 parser.add_argument('--dataset', default='CIFAR10', choices=datasets)
-parser.add_argument('--model', default='ResNet18', choices=list(models.get_model_choices()))
+parser.add_argument('--model', default='ResNet10', choices=list(models.get_model_choices()))
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--ood-dataset', choices=datasets, help='dataset to use for out of distribution images')
@@ -55,6 +55,8 @@ parser.add_argument('--wandb', action='store_true', help='log using wandb')
 parser.add_argument('--word2vec', action='store_true')
 parser.add_argument("--track_nodes", nargs="*", type=str, help="nodes to keep track of")
 parser.add_argument("--train-word2vec", action='store_true', help="fit model to pretrained weights")
+parser.add_argument('--freeze-classes',  nargs="*", type=str, help="classes whose FC weights should freeze")
+parser.add_argument('--weight-decay', type=float, default=5e-4)
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -158,7 +160,7 @@ populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
     keys=loss.keys, globals=globals())
 criterion = class_criterion(**loss_kwargs)
 
-optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
 
 def adjust_learning_rate(epoch, lr):
     if epoch <= 150 / 350. * args.epochs:  # 32k iterations

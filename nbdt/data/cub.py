@@ -15,7 +15,7 @@ class CUB2011(Dataset):
     filename = 'CUB_200_2011.tgz'
     tgz_md5 = '97eceeb196236b17998738112f37df78'
 
-    def __init__(self, root, train=True, download=True):
+    def __init__(self, root, train=True, download=True, transform=None):
         self.root = os.path.expanduser(root)
         if train:
             self.transform = self.transform_train()
@@ -35,6 +35,9 @@ class CUB2011(Dataset):
                              names=['img_id', 'filepath'])
         image_class_labels = pd.read_csv(os.path.join(self.root, 'CUB_200_2011', 'image_class_labels.txt'),
                                          sep=' ', names=['img_id', 'target'])
+        classes = pd.read_csv(os.path.join(self.root, 'CUB_200_2011', 'classes.txt'),
+                                         sep=' ', names=['class', 'name'])
+        self.classes = [n.split('.')[1] for n in classes["name"]]
         train_test_split = pd.read_csv(os.path.join(self.root, 'CUB_200_2011', 'train_test_split.txt'),
                                        sep=' ', names=['img_id', 'is_training_img'])
 
@@ -50,7 +53,7 @@ class CUB2011(Dataset):
     def transform_train(input_size=224):
         return transforms.Compose([
             transforms.Resize(input_size + 32),
-            transforms.RandomRotation(45),
+            # transforms.RandomRotation(45),
             transforms.RandomResizedCrop(input_size),  # TODO: may need updating
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
@@ -101,7 +104,13 @@ class CUB2011(Dataset):
         img = Image.open(path)
 
         if self.transform is not None:
-            img = self.transform(img)
+            try:
+                img = self.transform(img)
+            except:
+                from PIL import ImageOps
+                img = ImageOps.colorize(img, black ="black", white ="white")
+                img = self.transform(img)
+                # print(path)
 
         return img, target
 
