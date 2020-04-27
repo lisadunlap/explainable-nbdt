@@ -119,9 +119,10 @@ def get_transform_from_name(dataset_name, dataset, input_size):
         transform_train = dataset.transform_train(input_size)
         transform_test = dataset.transform_val(input_size)
 
-    if dataset_name in ('MiniPlaces'):
+    if dataset_name in ('MiniPlaces', 'AnimalsWithAttributes2'):
         transform_train = dataset.transform_train()
         transform_test = dataset.transform_test()
+
 
     return transform_train, transform_test
 

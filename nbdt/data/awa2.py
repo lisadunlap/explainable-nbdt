@@ -1,11 +1,16 @@
 import os
+import numpy as np
 import torchvision.transforms as transforms
+import json
+from PIL import Image
 from torch.utils.data import Dataset
 
 __all__ = names = ('AnimalsWithAttributes2',)
 
 
 class AnimalsWithAttributes2(Dataset): 
+    train_ratio = 0.8
+
     def __init__(self, root, transform, train=True, download=False, shuffle=False, binary=True, **kwargs):
         # load in the data, we ignore test case, only train/val
         self.root = os.path.join(root, 'awa2')
@@ -53,13 +58,21 @@ class AnimalsWithAttributes2(Dataset):
                 label = line.strip()
                 self.use_classes.append(label)
 
+        np.random.set_state(42)
         for image_folder in os.listdir(self.photos_path):
             if image_folder in self.use_classes:
                 label = self.classes.index(image_folder)
                 image_folder_path = os.path.join(self.photos_path, image_folder)
                 new_image_paths = [os.path.join(image_folder_path, f) for f in os.listdir(image_folder_path)]
+                np.random.shuffle(new_image_paths)
+                n_train = int(len(new_image_paths) * 0.7)
+                if self.train:
+                    new_image_paths = new_image_paths[:n_train]
+                else:
+                    new_image_paths = new_image_paths[n_train:]
                 self.images.extend(new_image_paths)
                 self.labels.extend([label] * len(new_image_paths))
+            
 
         if self.shuffle:
             state = np.random.get_state()
@@ -85,7 +98,7 @@ class AnimalsWithAttributes2(Dataset):
         # label is the index of the correct category
         label = self.labels[idx]
         predicates = self.class_predicates[label]
-        return (image, label, predicates)
+        return (image, predicates), label
 
     def setup_custom_wnids(self, root):
         wnid_to_class = {}
