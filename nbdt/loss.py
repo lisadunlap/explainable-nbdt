@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from collections import defaultdict
 from nbdt.data.custom import Node
 import numpy as np
-from nbdt.utils import Colors
+from nbdt.utils import Colors, smooth_one_hot
 
 __all__ = names = ('HardTreeSupLoss', 'SoftTreeSupLoss', 'CrossEntropyLoss', 'HardTreeSupLossMultiPath')
 keys = (
@@ -155,8 +155,25 @@ class HardTreeSupLoss(TreeSupLoss):
 
 
 class SoftTreeSupLoss(HardTreeSupLoss):
+    def __init__(self, path_graph, path_wnids, classes,
+            max_leaves_supervised=-1, min_leaves_supervised=-1,
+            tree_supervision_weight=1., weighted_average=False,
+            criterion=nn.CrossEntropyLoss(), seen_to_zsl_cls={}, smoothing=0.0):
+    """ seen_to_zsl_cls: dict mapping seen class to corresponding ZSL class,
+            used for label smoothing
+            example: {'dog': 'cat', 'horse': 'zebra'}
+        smoothing: used for label smoothing, use 0 to disable """
+        super().__init__()
+        self.seen_to_zsl_cls = seen_to_zsl_cls
+        self.smoothing = smoothing
+
 
     def forward(self, outputs, targets):
+        print("outputs:", outputs)
+        print("targets:", targets)
+        print("classes:", self.classes)
+        1/0
+        smoothed_targets = smooth_one_hot(targets, len(self.classes), self.seen_to_zsl_cls, self.smoothing)
         loss = self.criterion(outputs, targets)
         bayesian_outputs = SoftTreeSupLoss.inference(
             self.nodes, outputs, self.num_classes, self.weighted_average)

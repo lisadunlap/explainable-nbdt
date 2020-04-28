@@ -424,10 +424,8 @@ class LabelSmoothingLoss(nn.Module):
             true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
         return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
-def smooth_one_hot(true_labels: torch.Tensor, classes: int, smoothing=0.0):
-    """
-    if smoothing == 0, it's one-hot method
-    if 0 < smoothing < 1, it's smooth method
+def smooth_one_hot(labels, num_classes, seen_to_zsl_cls, smoothing=0.0):
+    """ smoothing == 0: one-hot; 0 < smoothing < 1: smoothing 
 
     How to use:
     Loss = CrossEntropyLoss(NonSparse=True, ...)
@@ -438,10 +436,10 @@ def smooth_one_hot(true_labels: torch.Tensor, classes: int, smoothing=0.0):
     outputs = model(data)
 
     smooth_label = smooth_one_hot(labels, ...)
-    loss = (outputs, smooth_label)
-    ...
+    loss = (outputs, smooth_label) """
+    if smoothing == 0 or not seen_to_zsl_cls:
+        return labels
 
-    """
     assert 0 <= smoothing < 1
     confidence = 1.0 - smoothing
     label_shape = torch.Size((true_labels.size(0), classes))
