@@ -187,8 +187,11 @@ with torch.no_grad():
                 fc_weights[i] = cls_to_vec[cls]
             else:
                 fc_weights = np.insert(fc_weights, i, cls_to_vec[cls], axis=0)
+        else:
+            fc_weights[i] /= LA.norm(fc_weights[i])
         # else:
         #     assert all(fc_weights[i] == get_word_embedding(cls, trainset, args.dataset))
+    print(fc_weights[3])
     net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes))
     net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights))
 

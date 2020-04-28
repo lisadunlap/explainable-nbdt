@@ -167,8 +167,10 @@ def adjust_learning_rate(epoch, lr):
       return lr
     elif epoch <= 250 / 350. * args.epochs:  # 48k iterations
       return lr/10
+    elif epoch <= 350 / 500. * args.epochs:  # 48k iterations
+        return lr / 100
     else:
-      return lr/100
+      return lr/1000
 
 def exp_lr_scheduler(epoch, init_lr=0.0001, lr_decay_epoch=30, weight=0.1):
     lr = init_lr * (weight ** (epoch // lr_decay_epoch))

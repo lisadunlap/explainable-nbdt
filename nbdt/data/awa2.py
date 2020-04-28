@@ -4,6 +4,9 @@ import torchvision.transforms as transforms
 import json
 from PIL import Image
 from torch.utils.data import Dataset
+import numpy as np
+import json
+from PIL import Image
 
 __all__ = names = ('AnimalsWithAttributes2',)
 
