@@ -42,7 +42,9 @@ parser.add_argument('--name', default='',
 parser.add_argument('--pretrained', action='store_true',
                     help='Download pretrained model. Not all models support this.')
 parser.add_argument('--new-classes', nargs='*',
-                    help='New classes used for zero-shot.')
+                    help='New class names used for zero-shot.')
+parser.add_argument('--new-labels', nargs='*', type=int,
+                    help='New class indices used for zero-shot.')
 
 parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
@@ -92,7 +94,11 @@ model = getattr(models, args.model)
 if args.replace:
     model_kwargs = {'num_classes': len(testset.classes)}
 else:
-    model_kwargs = {'num_classes': len(testset.classes) - len(args.new_classes)}
+    if args.new_classes is not None:
+        n_new_classes = len(args.new_classes)
+    else:
+        n_new_classes = len(args.new_labels)
+    model_kwargs = {'num_classes': len(testset.classes) - n_new_classes}
 
 if args.pretrained:
     try:
@@ -132,7 +138,10 @@ if args.resume:
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
 # get one sample of each zeroshot class, and get its output at linear layer
-cls_to_vec = {cls: [] for cls in args.new_classes}
+if args.new_classes is None:
+    cls_to_vec = {cls: [] for i, cls in enumerate(trainset.classes) if i in args.new_labels}
+else:
+    cls_to_vec = {cls: [] for cls in args.new_classes}
 hooked_inputs = None
 
 def testhook(self, input, output):
@@ -153,22 +162,18 @@ with torch.no_grad():
     for i, (inputs, labels) in enumerate(trainloader):
         net(inputs)
 
-        done = False
         for vec, label in zip(hooked_inputs, labels):
+            num_samples = min([len(cls_to_vec[c]) for c in cls_to_vec])
+            if num_samples >= args.num_samples:
+                break
             cls_name = trainset.classes[label]
-            # if cls_name in cls_to_vec and cls_to_vec[cls_name] is None:
             if cls_name in cls_to_vec and len(cls_to_vec[cls_name]) < args.num_samples:
-                if num_samples >= args.num_samples:
-                    done = True
-                    break
                 if args.word2vec:
                     word_vec = get_saved_word2vec(word2vec_path + cls_name + '.npy', args.dimension, projection_matrix)
                     cls_to_vec[cls_name] = word_vec
                 else:
                     cls_to_vec[cls_name].append(vec)
                 num_samples = min([len(cls_to_vec[c]) for c in cls_to_vec])
-        if done:
-            break
 
     for cls in cls_to_vec:
         cls_to_vec[cls] = np.average(np.array(cls_to_vec[cls]), axis=0)

@@ -101,6 +101,10 @@ class AnimalsWithAttributes2(Dataset):
 
     def __getitem__(self, idx): 
         image = Image.open(self.images[idx])
+        image_np = np.array(image)
+        if len(image_np.shape) == 2:
+            image_np = np.repeat(image_np[:,:,np.newaxis], 3, axis=2)
+            image = Image.fromarray(image_np)
         if self.transform is not None:
             image = self.transform(image)
         # label is the index of the correct category
