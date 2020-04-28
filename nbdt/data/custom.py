@@ -16,7 +16,7 @@ from nbdt.utils import (
 from collections import defaultdict
 from nbdt.graph import get_wnids, read_graph, get_leaves, get_non_leaves, \
     get_leaf_weights
-from . import imagenet
+from . import imagenet, cub
 from PIL import Image
 import torch.nn as nn
 import random
@@ -34,7 +34,8 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'CIFAR100ResampleLabels', 'TinyImagenet200ResampleLabels',
                    'Imagenet1000ResampleLabels', 'CIFAR10CombineClasses',
                    'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
-                   'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM',)
+                   'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM',
+                   'CUB2011ExcludeLabels')
 keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes', 'exclude_classes')
 
 
@@ -601,6 +602,14 @@ class Imagenet1000ExcludeLabels(ExcludeLabelsDataset):
     def __init__(self, *args, root='./data', exclude_labels=(0,), **kwargs):
         super().__init__(
             dataset=imagenet.Imagenet1000(*args, root=root, **kwargs),
+            exclude_labels=exclude_labels)
+
+class CUB2011ExcludeLabels(ExcludeLabelsDataset):
+
+    def __init__(self, *args, root='./data', exclude_labels=(0,), **kwargs):
+        exclude_labels = list(range(150, 299))
+        super().__init__(
+            dataset=cub.CUB2011(*args, root=root, **kwargs),
             exclude_labels=exclude_labels)
 
 class ExcludeClassesDataset(ExcludeLabelsDataset):

@@ -11,7 +11,7 @@ import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset',
-    choices=('CIFAR100', 'CIFAR10'),
+    choices=('CIFAR100', 'CIFAR10', 'CUB_200_2011'),
     default='CIFAR10')
 parser.add_argument('--root', default='./data')
 args = parser.parse_args()
