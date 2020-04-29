@@ -12,8 +12,10 @@ import os
 import argparse
 import json
 import numpy as np
+from numpy import linalg as LA
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
 
 import models
 
@@ -30,7 +32,10 @@ datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
 parser = argparse.ArgumentParser(description='T-SNE vis generation')
 parser.add_argument('--dataset', default='CIFAR10', choices=datasets)
 parser.add_argument('--model', default='ResNet18', choices=list(models.get_model_choices()))
-parser.add_argument('--vis-json-path', type=str, help='json path where node specific information is stored')
+parser.add_argument('--vis-json-path', type=str,
+                    help='json path where node specific information is stored.')
+parser.add_argument('--plot-all', action='store_true', help='plot all feature vectors')
+parser.add_argument('--plot-fc', action='store_true', help='plot rows of FC layers')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--perplexity', default=20, type=int, help='perplexity for tsne')
 parser.add_argument('--angle', default=0.2, type=float, help='angle for tsne')
@@ -124,44 +129,55 @@ if args.resume:
             net.load_state_dict(checkpoint)
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
-net.module.linear = nn.Flatten()
-
-with open(args.vis_json_path, 'r') as f:
-    samples_in_node = json.load(f)
-
-# note: samples are indices of the dataset
 samples_to_node = {}
 samples_idx = []  # maps row indexes from sample_vectors to actual index in dataset
-sample_vectors = [] # FC inputs
-for node in samples_in_node:
-    for sample in samples_in_node[node]:
-        samples_to_node[sample] = node
+sample_vectors = [] # vectors we plot
+
+if not args.plot_all:  
+    with open(args.vis_json_path, 'r') as f:
+        samples_in_node = json.load(f)
+
+    # note: samples are indices of the dataset
+    for node in samples_in_node:
+        for sample in samples_in_node[node]:
+            samples_to_node[sample] = node
+
+else:
+    samples_in_node = [i for i, _ in enumerate(testset.classes)]
+    samples_to_node = {i:i for i in samples_in_node}
+
+hooked_inputs = None
+
+def testhook(self, input, output):
+    global hooked_inputs
+    hooked_inputs = input[0].cpu().numpy()
+
+net.module.linear.register_forward_hook(testhook)
 
 net.eval()
-total = 0
 with torch.no_grad():
-    for batch_idx, (inputs, _) in enumerate(testloader):
+    for batch_idx, (inputs, targets) in enumerate(testloader):
         inputs = inputs.to(device)
-        outputs = net(inputs)
+        net(inputs)
 
-        total += outputs.size(0)
-
-        if device == 'cuda':
-            outputs = outputs.cpu()
-        outputs = outputs.numpy()
-
-        for idx, output in zip(range(total, total+100), outputs):
-            if idx in samples_to_node:
+        for idx, output in enumerate(hooked_inputs):
+            if args.plot_all:
+                samples_idx.append(targets[idx])
+                sample_vectors.append(output / LA.norm(output))
+            elif idx in samples_to_node:
                 samples_idx.append(idx)
                 sample_vectors.append(output)
 
+    if args.plot_fc:
+        fc_weights = net.module.linear.weight.cpu().numpy()
+        for i, row in enumerate(fc_weights):
+            sample_vectors.append(row)
+            samples_idx.append(i)
+
 sample_vectors = np.array(sample_vectors)
+print("Samples collected shape: ", sample_vectors.shape)
 
 from sklearn.manifold import TSNE
-
-# get raw images
-testset = dataset(**dataset_kwargs, root='./data', train=False, download=True)
-images = [testset[i][0] for i in samples_idx]
 
 tsne = TSNE(n_components=2, learning_rate=150, perplexity=args.perplexity, angle=args.angle, verbose=2).fit_transform(sample_vectors)
 tx, ty = tsne[:,0], tsne[:,1]
@@ -174,22 +190,51 @@ height = 500
 max_dim = 64
 
 handles = []
-colors = ['red', 'blue', 'green', 'yellow', 'purple', 'orange']
+colors = ['red', 'blue', 'green', 'brown', 'purple', 'orange', 'olive', 'cyan', 'darkkhaki', 'lavender', 'pink',]
+markers = ['_', 'v', '^', '<', '>', 'D', 's', 'p', '*', '+',]
 COLOR_MAPS = [(color, getcolor(color, mode='RGB')) for color in colors]
 node_to_color = {}
 
 for node, (color_plt, color_pil) in zip(samples_in_node, COLOR_MAPS):
-    patch = mpatches.Patch(color=color_plt, label=node)
+    if args.plot_all:
+        patch = mlines.Line2D([], [], color=color_plt, marker=markers[node], label=testset.classes[node], linestyle='None')
+    else:
+        patch = mpatches.Patch(color=color_plt, label=node)
     handles.append(patch)
     node_to_color[node] = color_pil
 
-full_image = Image.new('RGBA', (width, height))
-for img, x, y, sample_idx in zip(images, tx, ty, samples_idx):
-    #tile = Image.open(img)
-    node = samples_to_node[sample_idx]
-    img = ImageOps.expand(img, border=5, fill=node_to_color[node])
-    tile = img
-    rs = max(1, tile.width/max_dim, tile.height/max_dim)
+if args.plot_fc:
+    for i, color_plt in zip(range(len(testset.classes)), colors):
+        patch = mlines.Line2D([], [], color='black', marker=markers[i], label=f"{testset.classes[i]} FC row", linestyle='None')
+        handles.append(patch)
+
+plt.figure(figsize = (12,9))
+
+if args.plot_all:
+    for i, (x, y, sample_idx) in enumerate(zip(tx, ty, samples_idx)):
+        if args.plot_fc and i >= len(samples_idx) - 10:
+            print(x,y)
+            plt.scatter([x], [y], s=200, color='black', marker=markers[sample_idx])
+        else:
+            plt.scatter([x], [y], marker=markers[sample_idx], color=colors[sample_idx])
+else:
+    # get raw images
+    testset = dataset(**dataset_kwargs, root='./data', train=False, download=True)
+    images = [testset[i][0] for i in samples_idx]
+    full_image = Image.new('RGBA', (width, height))
+    for img, x, y, sample_idx in zip(images, tx, ty, samples_idx):
+        node = samples_to_node[sample_idx]
+        img = ImageOps.expand(img, border=5, fill=node_to_color[node])
+        tile = img
+        rs = max(1, tile.width/max_dim, tile.height/max_dim)
+        tile = tile.resize((int(tile.width/rs), int(tile.height/rs)), Image.ANTIALIAS)
+        full_image.paste(tile, (int((width-max_dim)*x), int((height-max_dim)*y)), mask=tile.convert('RGBA'))
+    plt.imshow(full_image)
+
+
+plt.legend(handles=handles, bbox_to_anchor=(0.9,1.1), loc="upper left")
+plt.show()
+x(1, tile.width/max_dim, tile.height/max_dim)
     tile = tile.resize((int(tile.width/rs), int(tile.height/rs)), Image.ANTIALIAS)
     full_image.paste(tile, (int((width-max_dim)*x), int((height-max_dim)*y)), mask=tile.convert('RGBA'))
 
