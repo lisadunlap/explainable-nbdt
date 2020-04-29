@@ -18,7 +18,7 @@ from nbdt.utils import (
     get_transform_from_name, test_word2vec
 )
 
-datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.cub.names + data.awa2.names
+datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.awa2.names + data.cub.names + data.miniplaces.names
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
@@ -94,7 +94,7 @@ testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, t
 assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=min(100, args.batch_size), shuffle=False, num_workers=2)
 
 Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
 
@@ -192,6 +192,8 @@ def train(epoch, analyzer):
     correct = 0
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
+        if args.dataset in ("AnimalsWithAttributes2"):
+            inputs, predicates = inputs
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = net(inputs)
@@ -229,6 +231,8 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
+            if args.dataset in ("AnimalsWithAttributes2"):
+                inputs, predicates = inputs
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)

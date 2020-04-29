@@ -19,7 +19,7 @@ from gensim.models import Word2Vec
 from pathlib import Path
 
 # tree-generation consntants
-METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node')
+METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node', 'induced-attributes')
 DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000',
             'TinyImagenet200CombineClasses', 'MiniPlaces', 'AnimalsWithAttributes2', 'CUB2011')
 
@@ -155,9 +155,10 @@ def get_transform_from_name(dataset_name, dataset, input_size):
         transform_train = dataset.transform_train(input_size)
         transform_test = dataset.transform_val(input_size)
 
-    if dataset_name in ('MiniPlaces'):
+    if dataset_name in ('MiniPlaces', 'AnimalsWithAttributes2'):
         transform_train = dataset.transform_train()
         transform_test = dataset.transform_test()
+
 
     return transform_train, transform_test
 

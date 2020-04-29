@@ -385,12 +385,58 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
     return G
 
 
+def build_induced_attribute_graph(dataset, checkpoint, linkage='ward', affinity='euclidean',
+        branching_factor=2, ignore_labels=[]):
+    centers = get_centers(checkpoint)
+    labels = dataset.classes
+    n_classes = centers.size(0)
+
+    G = nx.DiGraph()
+
+    # add leaves
+    center_to_label = {}
+    for i, label in enumerate(labels):
+        center_to_label[i] = label
+        G.add_node(label)
+        nx.set_node_attributes(G, {
+            label: {'label': label, 'attributes': dataset.attributes[i]}
+        })
+
+    # add rest of tree
+    clustering = AgglomerativeClustering(
+        linkage=linkage,
+        n_clusters=branching_factor,
+        affinity=affinity,
+    ).fit(centers)
+    children = clustering.children_
+    index_to_label = {}
+
+    for index, pair in enumerate(map(tuple, children)):
+        parent = FakeSynset.create_from_offset(len(G.nodes))
+        G.add_node(parent.wnid)
+        index_to_label[index] = parent.wnid
+        attributes = []
+
+        for child in pair:
+            if child < n_classes:
+                child_label = labels[child]
+            else:
+                child_label = index_to_label[child - n_classes]
+            G.add_edge(parent.wnid, child_label)
+            attributes.append(G.nodes[child_label]['attributes'])
+        nx.set_node_attributes(G, {parent.wnid: {'attributes': combine_attributes(attributes)}})
+
+    assert len(list(get_roots(G))) == 1, list(get_roots(G))
+    return G
+
+
 def get_centers(checkpoint):
     data = torch.load(checkpoint, map_location=torch.device('cpu'))
     try:
         net = data['net']
     except:
         net = data
+
 
     keys = ('fc.weight', 'linear.weight', 'module.linear.weight',
             'module.net.linear.weight', 'output.weight', 'module.output.weight',
@@ -404,6 +450,10 @@ def get_centers(checkpoint):
         f'Could not find FC weights in {checkpoint} with keys: {net.keys()}')
     return fc.detach()
 
+
+""" given a list of binary vectors representing attributes, returns their intersection """
+def combine_attributes(attributes):
+    return np.all(np.array(attributes).astype(bool), axis=0).astype(int).tolist()
 
 ####################
 # AUGMENTING GRAPH #
