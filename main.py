@@ -94,7 +94,7 @@ testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, t
 assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
+testloader = torch.utils.data.DataLoader(testset, batch_size=min(100, args.batch_size), shuffle=False, num_workers=2)
 
 Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
 
