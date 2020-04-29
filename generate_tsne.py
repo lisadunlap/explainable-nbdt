@@ -234,11 +234,3 @@ else:
 
 plt.legend(handles=handles, bbox_to_anchor=(0.9,1.1), loc="upper left")
 plt.show()
-x(1, tile.width/max_dim, tile.height/max_dim)
-    tile = tile.resize((int(tile.width/rs), int(tile.height/rs)), Image.ANTIALIAS)
-    full_image.paste(tile, (int((width-max_dim)*x), int((height-max_dim)*y)), mask=tile.convert('RGBA'))
-
-plt.figure(figsize = (16,12))
-plt.imshow(full_image)
-plt.legend(handles=handles)
-plt.show()
