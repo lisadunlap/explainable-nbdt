@@ -102,8 +102,6 @@ class AnimalsWithAttributes2(Dataset):
         print("# images found at path '%s': %d" % (self.labels_path, self.images.shape[0]))
 
         wnid_to_class = self.setup_custom_wnids(root)
-        with open(os.path.join(root, 'fake_wnid_to_class.json'), 'w') as f:
-            json.dump(wnid_to_class, f)
 
 
     def __len__(self): 
@@ -124,12 +122,11 @@ class AnimalsWithAttributes2(Dataset):
 
     def setup_custom_wnids(self, root):
         wnid_to_class = {}
-        with open(os.path.join(self.root, 'wnids.txt'), 'w') as f:
+        with open(os.path.join(self.root, 'wnids.txt'), 'r') as f:
             # use all 9s to avoid conflict with wn
-            for i in range(len(self.classes)):
-                wnid = 'f%s' % str(i).zfill(8).replace('0', '9')
+            for i, line in enumerate(f):
+                wnid = line.strip()
                 wnid_to_class[wnid] = self.classes[i]
-                f.write(wnid + '\n')
         return wnid_to_class
 
     @staticmethod
