@@ -43,6 +43,7 @@ parser.add_argument('--name', default='',
 parser.add_argument('--pretrained', action='store_true',
                     help='Download pretrained model. Not all models support this.')
 parser.add_argument('--eval', help='eval only', action='store_true')
+parser.add_argument('--n-workers', help='num workers', default=2, type=int)
 
 # options specific to this project and its dataloaders
 parser.add_argument('--loss', choices=loss.names, default='CrossEntropyLoss')
@@ -93,8 +94,8 @@ testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, t
 
 assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
-testloader = torch.utils.data.DataLoader(testset, batch_size=min(100, args.batch_size), shuffle=False, num_workers=2)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
+testloader = torch.utils.data.DataLoader(testset, batch_size=min(100, args.batch_size), shuffle=False, num_workers=args.n_workers)
 
 Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
 
@@ -287,7 +288,7 @@ if args.ood_dataset:
         keys=data.custom.keys, globals=globals())
     ood_dataset_kwargs['include_classes'] = args.ood_classes # manual override
     ood_set = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
-    ood_loader = torch.utils.data.DataLoader(ood_set, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    ood_loader = torch.utils.data.DataLoader(ood_set, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
 
 analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
