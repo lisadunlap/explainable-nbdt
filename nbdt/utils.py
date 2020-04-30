@@ -19,7 +19,7 @@ from gensim.models import Word2Vec
 from pathlib import Path
 
 # tree-generation consntants
-METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node')
+METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node', 'induced-attributes')
 DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000',
             'TinyImagenet200CombineClasses', 'MiniPlaces', 'AnimalsWithAttributes2', 'CUB2011')
 
@@ -155,9 +155,10 @@ def get_transform_from_name(dataset_name, dataset, input_size):
         transform_train = dataset.transform_train(input_size)
         transform_test = dataset.transform_val(input_size)
 
-    if dataset_name in ('MiniPlaces'):
+    if dataset_name in ('MiniPlaces', 'AnimalsWithAttributes2'):
         transform_train = dataset.transform_train()
         transform_test = dataset.transform_test()
+
 
     return transform_train, transform_test
 
@@ -357,12 +358,16 @@ def get_word_embedding(cls, trainset, dataset_name='CIFAR10'):
     return word_vec/LA.norm(word_vec)
 
 
-def word2vec_model(net, trainset, dataset_name='CIFAR10', exclude_classes=None, dimension=300):
+def word2vec_model(net, trainset, dataset_name='CIFAR10', exclude_classes=None, pretrained=False):
     """ Sets FC layer weights to word2vec embeddings, freezing them unless
     exclude classes is given, in which case those specific rows are frozen in
     the backward call"""
 
     print('==> Adding in word2vec embeddings...')
+    if pretrained:
+        layer = net.module.fc
+    else:
+        layer = net.module.linear
     word2vec_path = os.path.join(os.path.join('./data',DATASET_TO_FOLDER_NAME[dataset_name]), "word2vec/")
     if not os.path.exists(word2vec_path):
         raise Exception("No saved word2vec embeddings, run generate_word2vec.py")
@@ -373,15 +378,14 @@ def word2vec_model(net, trainset, dataset_name='CIFAR10', exclude_classes=None, 
         word_vec /= LA.norm(word_vec)
         fc_weights = np.append(fc_weights, word_vec)
     fc_weights = fc_weights.reshape((len(trainset.classes), 512))
-    net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
-    net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
-    # test_word2vec(net, trainset, dataset_name, exclude_classes, dimension)
+    layer = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
+    layer.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
     # Colors.cyan("All word2vec checks passed!")
 
     # freeze layer
-    net.module.linear.weight.requires_grad = False
-    net.module.linear.bias.requires_grad = False
-    net.module.linear.requires_grad = False
+    layer.weight.requires_grad = False
+    layer.bias.requires_grad = False
+    layer.requires_grad = False
     Colors.cyan("Freezing FC weights..")
     return net
 

@@ -17,6 +17,7 @@ from .linear import *
 from .wideresnet import *
 from pytorchcv.models.wrn_cifar import *
 from pytorchcv.models.efficientnet import *
+from torchvision.models.resnet import *
 
 
 def get_model_choices():

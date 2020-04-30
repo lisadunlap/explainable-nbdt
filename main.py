@@ -18,7 +18,7 @@ from nbdt.utils import (
     get_transform_from_name, test_word2vec
 )
 
-datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.cub.names + data.awa2.names
+datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.awa2.names + data.cub.names + data.miniplaces.names
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
@@ -43,6 +43,7 @@ parser.add_argument('--name', default='',
 parser.add_argument('--pretrained', action='store_true',
                     help='Download pretrained model. Not all models support this.')
 parser.add_argument('--eval', help='eval only', action='store_true')
+parser.add_argument('--n-workers', help='num workers', default=2, type=int)
 
 # options specific to this project and its dataloaders
 parser.add_argument('--loss', choices=loss.names, default='CrossEntropyLoss')
@@ -95,8 +96,8 @@ testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, t
 
 assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=2)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
+testloader = torch.utils.data.DataLoader(testset, batch_size=min(100, args.batch_size), shuffle=False, num_workers=args.n_workers)
 
 Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
 
@@ -116,7 +117,13 @@ model_kwargs = {'num_classes': len(trainset.classes) }
 if args.pretrained:
     try:
         print('==> Loading pretrained model..')
-        net = model(pretrained=True, **model_kwargs)
+        # net = model(pretrained=True, **model_kwargs)
+        net = model(pretrained=True)
+        # TODO: this is hardcoded
+        if int(args.model[6:]) <= 34:
+            net.fc = nn.Linear(512, model_kwargs['num_classes'])
+        else:
+            net.fc = nn.Linear(512*4, model_kwargs['num_classes'])
     except Exception as e:
         Colors.red(f'Fatal error: {e}')
         exit()
@@ -162,7 +169,9 @@ elif args.path_resume:
 
 
 if args.word2vec:
-    net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset)
+    net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset,
+                         pretrained=args.pretrained)
+
 
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
@@ -202,6 +211,8 @@ def train(epoch, analyzer):
     correct = 0
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
+        if args.dataset in ("AnimalsWithAttributes2"):
+            inputs, predicates = inputs
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = net(inputs)
@@ -239,6 +250,8 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
+            if args.dataset in ("AnimalsWithAttributes2"):
+                inputs, predicates = inputs
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -293,7 +306,7 @@ if args.ood_dataset:
         keys=data.custom.keys, globals=globals())
     ood_dataset_kwargs['include_classes'] = args.ood_classes # manual override
     ood_set = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
-    ood_loader = torch.utils.data.DataLoader(ood_set, batch_size=args.batch_size, shuffle=True, num_workers=2)
+    ood_loader = torch.utils.data.DataLoader(ood_set, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
 
 analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
