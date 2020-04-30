@@ -12,13 +12,20 @@ __all__ = names = ('AnimalsWithAttributes2',)
 
 
 class AnimalsWithAttributes2(Dataset): 
+    # drop classes - if true, drops classes outside of current set, changes from n-way to m-way classification problem
+    accepts_drop_classes = True
+    accepts_zeroshot_dataset = True
     train_ratio = 0.8
 
-    def __init__(self, root, transform=None, train=True, download=False, shuffle=False, binary=True, zeroshot=False,
-                 ignore_zeroshot_classes=True, **kwargs):
+    """
+    helpful notes - indices of zeroshot classes are, 5, 13, 14, 17, 23, 24, 33, 38, 41
+    """
+
+    def __init__(self, root, transform=None, train=True, download=False, shuffle=False, binary=True, zeroshot_dataset=False,
+                 drop_classes=False, **kwargs):
         # load in the data, we ignore test case, only train/val
         self.root = os.path.join(root, 'awa2')
-        labels_fname = 'trainclasses.txt' if not zeroshot else 'testclasses.txt'
+        labels_fname = 'trainclasses.txt' if not zeroshot_dataset else 'testclasses.txt'
         matrix_fname = 'predicate-matrix-binary.txt' if binary else 'predicate-matrix-continuous.txt'
 
         self.photos_path = os.path.join(self.root, 'JPEGImages')
@@ -27,8 +34,8 @@ class AnimalsWithAttributes2(Dataset):
         self.predicates_path = os.path.join(self.root, 'predicates.txt')
         self.predicates_matrix_path = os.path.join(self.root, matrix_fname)
 
-        self.ignore_zeroshot_classes = ignore_zeroshot_classes
-        self.zeroshot = zeroshot
+        self.drop_classes = drop_classes
+        self.zeroshot_dataset = zeroshot_dataset
         self.train = train
         self.shuffle = shuffle
         self.transform = transform
@@ -55,7 +62,7 @@ class AnimalsWithAttributes2(Dataset):
                 label = line.strip()
                 self.use_classes.append(label)
 
-        if self.ignore_zeroshot_classes == True:
+        if self.drop_classes:
             self.classes = self.use_classes
 
         with open(self.predicates_path, 'r') as f:
