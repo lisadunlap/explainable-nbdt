@@ -100,13 +100,13 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 
 Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
 
+seen_to_zsl_cls = {}
 if args.seen_to_zsl:
     assert len(args.seen_to_zsl) % 2 == 0, "Classes must be given in pairs"
-    seen_to_zsl_cls = {}
     for i in range(0, len(args.seen_to_zsl), 2):
         seen, zero = args.seen_to_zsl[i:i+2]
         seen_to_zsl_cls[seen] = zero
-    args.seen_to_zsl_cls = seen_to_zsl_cls
+args.seen_to_zsl_cls = seen_to_zsl_cls
 
 # Model
 print('==> Building model..')

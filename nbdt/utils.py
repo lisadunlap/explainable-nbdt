@@ -120,7 +120,7 @@ def populate_kwargs(args, kwargs, object, name='Dataset', keys=(), globals={}):
         accepts_key = getattr(object, f'accepts_{key}', False)
         if not accepts_key:
             continue
-        assert key in args or callable(accepts_key)
+        assert key in args or callable(accepts_key), key
 
         value = getattr(args, key, None)
         if callable(accepts_key):
