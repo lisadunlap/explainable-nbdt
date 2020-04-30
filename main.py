@@ -57,6 +57,8 @@ parser.add_argument("--track_nodes", nargs="*", type=str, help="nodes to keep tr
 parser.add_argument("--train-word2vec", action='store_true', help="fit model to pretrained weights")
 parser.add_argument('--freeze-classes',  nargs="*", type=str, help="classes whose FC weights should freeze")
 parser.add_argument('--weight-decay', type=float, default=5e-4)
+parser.add_argument('--label-smoothing', type=float, default=0.0, help='Smoothing factor for label smoothing (0 < s <= 1)')
+parser.add_argument('--seen-to-zsl', nargs="*", type=str, help="list strings in pairs, mapping seen class to zeroshot class (e.g. 'dog' 'cat')")
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -97,6 +99,14 @@ trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, 
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 
 Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
+
+if args.seen_to_zsl:
+    assert len(args.seen_to_zsl) % 2 == 0, "Classes must be given in pairs"
+    seen_to_zsl_cls = {}
+    for i in range(0, len(args.seen_to_zsl), 2):
+        seen, zero = args.seen_to_zsl[i:i+2]
+        seen_to_zsl_cls[seen] = zero
+    args.seen_to_zsl_cls = seen_to_zsl_cls
 
 # Model
 print('==> Building model..')

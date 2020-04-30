@@ -10,7 +10,7 @@ __all__ = names = ('HardTreeSupLoss', 'SoftTreeSupLoss', 'CrossEntropyLoss', 'Ha
 keys = (
     'path_graph', 'path_wnids', 'max_leaves_supervised',
     'min_leaves_supervised', 'weighted_average', 'tree_supervision_weight',
-    'classes'
+    'classes', 'seen_to_zsl_cls', 'label_smoothing'
 )
 
 
@@ -155,25 +155,24 @@ class HardTreeSupLoss(TreeSupLoss):
 
 
 class SoftTreeSupLoss(HardTreeSupLoss):
+    accepts_seen_to_zsl_cls = True
+    accepts_label_smoothing = True
     def __init__(self, path_graph, path_wnids, classes,
             max_leaves_supervised=-1, min_leaves_supervised=-1,
             tree_supervision_weight=1., weighted_average=False,
-            criterion=nn.CrossEntropyLoss(), seen_to_zsl_cls={}, smoothing=0.0):
-    """ seen_to_zsl_cls: dict mapping seen class to corresponding ZSL class,
+            criterion=nn.CrossEntropyLoss(), seen_to_zsl_cls={}, label_smoothing=0.0):
+        """ seen_to_zsl_cls: dict mapping seen class to corresponding ZSL class,
             used for label smoothing
             example: {'dog': 'cat', 'horse': 'zebra'}
-        smoothing: used for label smoothing, use 0 to disable """
-        super().__init__()
+            label_smoothing: used for label smoothing, use 0 to disable """
+        super().__init__(path_graph, path_wnids, classes, max_leaves_supervised, min_leaves_supervised,
+            tree_supervision_weight, weighted_average, criterion)
         self.seen_to_zsl_cls = seen_to_zsl_cls
-        self.smoothing = smoothing
-
+        self.smoothing = label_smoothing
+        self.classes = classes
 
     def forward(self, outputs, targets):
-        print("outputs:", outputs)
-        print("targets:", targets)
-        print("classes:", self.classes)
-        1/0
-        smoothed_targets = smooth_one_hot(targets, len(self.classes), self.seen_to_zsl_cls, self.smoothing)
+        smoothed_targets = smooth_one_hot(targets, self.classes, self.seen_to_zsl_cls, self.smoothing)
         loss = self.criterion(outputs, targets)
         bayesian_outputs = SoftTreeSupLoss.inference(
             self.nodes, outputs, self.num_classes, self.weighted_average)

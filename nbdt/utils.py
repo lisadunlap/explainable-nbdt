@@ -424,7 +424,7 @@ class LabelSmoothingLoss(nn.Module):
             true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
         return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
 
-def smooth_one_hot(labels, num_classes, seen_to_zsl_cls, smoothing=0.0):
+def smooth_one_hot(labels, classes, seen_to_zsl_cls, smoothing=0.0):
     """ smoothing == 0: one-hot; 0 < smoothing < 1: smoothing 
 
     How to use:
@@ -441,10 +441,19 @@ def smooth_one_hot(labels, num_classes, seen_to_zsl_cls, smoothing=0.0):
         return labels
 
     assert 0 <= smoothing < 1
+    num_classes = len(classes)
+    label_shape = torch.Size((labels.size(0), num_classes))
     confidence = 1.0 - smoothing
-    label_shape = torch.Size((true_labels.size(0), classes))
+
     with torch.no_grad():
-        true_dist = torch.empty(size=label_shape, device=true_labels.device)
-        true_dist.fill_(smoothing / (classes - 1))
-        true_dist.scatter_(1, true_labels.data.unsqueeze(1), confidence)
+        true_dist = torch.zeros(size=label_shape, device=labels.device)
+        true_dist.scatter_(1, labels.data.unsqueeze(1), 1)
+    for seen, zsl in seen_to_zsl_cls.items():
+        zsl_idx, seen_idx = classes.index(zsl), classes.index(seen)
+        seen_selector = torch.zeros_like(labels.data.unsqueeze(1))
+        seen_selector[true_dist[:, seen_idx] == 1] = seen_idx
+        zsl_selector = torch.zeros_like(labels.data.unsqueeze(1))
+        zsl_selector[true_dist[:, seen_idx] == 1] = zsl_idx
+        true_dist.scatter_(1, seen_selector, confidence)
+        true_dist.scatter_(1, zsl_selector, smoothing)
     return true_dist

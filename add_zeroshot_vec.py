@@ -162,7 +162,7 @@ with torch.no_grad():
                     done = True
                     break
                 if args.word2vec:
-                    word_vec = get_saved_word2vec(word2vec_path + cls_name + '.npy', args.dimension, projection_matrix)
+                    word_vec = np.load(word2vec_path + cls_name + '.npy')
                     cls_to_vec[cls_name] = word_vec
                 else:
                     cls_to_vec[cls_name].append(vec)
