@@ -36,7 +36,8 @@ __all__ = names = ('CIFAR10IncludeLabels',
                    'CIFAR100CombineClasses', 'TinyImagenet200CombineClasses',
                    'Imagenet1000CombineClasses', 'TinyImagenet200GradCAM',
                    'CUB2011ExcludeLabels')
-keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes', 'exclude_classes')
+keys = ('include_labels', 'exclude_labels', 'include_classes', 'probability_labels', 'combine_classes',
+        'exclude_classes', 'drop_classes', 'zeroshot_dataset')
 
 
 def add_arguments(parser):
@@ -46,6 +47,8 @@ def add_arguments(parser):
     parser.add_argument('--include-classes', nargs='*', type=str)
     parser.add_argument('--exclude-classes', nargs='*', type=str)
     parser.add_argument('--combine-classes', nargs='+', type=str, action='append')
+    parser.add_argument('--drop-classes', action='store_true')
+    parser.add_argument('--zeroshot-dataset', action='store_true')
 
 
 

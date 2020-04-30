@@ -425,7 +425,7 @@ class HardFullTreePrior(Noop):
                 pass
             G = nx.DiGraph(self.G)
             for node in self.G.nodes():
-                G.nodes[node]['weight'] = self.node_counts[cls][node] / self.class_counts[cls]
+                G.nodes[node]['weight'] = self.node_counts[cls][node] / (self.class_counts[cls] + 1e-4)
             G.nodes[get_root(self.G)]['weight'] = 1
             json_data = node_link_data(G)
             try:
