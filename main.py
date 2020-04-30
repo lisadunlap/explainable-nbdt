@@ -107,7 +107,13 @@ model_kwargs = {'num_classes': len(trainset.classes) }
 if args.pretrained:
     try:
         print('==> Loading pretrained model..')
-        net = model(pretrained=True, **model_kwargs)
+        # net = model(pretrained=True, **model_kwargs)
+        net = model(pretrained=True)
+        # TODO: this is hardcoded
+        if int(args.model[6:]) <= 34:
+            net.fc = nn.Linear(512, model_kwargs['num_classes'])
+        else:
+            net.fc = nn.Linear(512*4, model_kwargs['num_classes'])
     except Exception as e:
         Colors.red(f'Fatal error: {e}')
         exit()
@@ -153,7 +159,9 @@ elif args.path_resume:
 
 
 if args.word2vec:
-    net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset)
+    net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset,
+                         pretrained=args.pretrained)
+
 
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
