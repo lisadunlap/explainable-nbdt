@@ -23,10 +23,10 @@ from PIL import Image, ImageOps
 from PIL.ImageColor import getcolor
 
 from nbdt.utils import (
-    generate_fname, populate_kwargs, Colors
+    generate_fname, populate_kwargs, Colors, get_transform_from_name
 )
 
-datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
+datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.awa2.names
 
 
 parser = argparse.ArgumentParser(description='T-SNE vis generation')
@@ -35,7 +35,9 @@ parser.add_argument('--model', default='ResNet18', choices=list(models.get_model
 parser.add_argument('--vis-json-path', type=str,
                     help='json path where node specific information is stored.')
 parser.add_argument('--plot-all', action='store_true', help='plot all feature vectors')
+parser.add_argument('--plot-some', nargs='*', type=int, help='class idxs to plot')
 parser.add_argument('--plot-fc', action='store_true', help='plot rows of FC layers')
+parser.add_argument('--plot-fc-specific', nargs='*', type=int, help='which FC rows to plot')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--perplexity', default=20, type=int, help='perplexity for tsne')
 parser.add_argument('--angle', default=0.2, type=float, help='angle for tsne')
@@ -49,6 +51,9 @@ parser.add_argument('--name', default='',
                     help='Name of experiment. Used for checkpoint filename')
 parser.add_argument('--pretrained', action='store_true',
                     help='Download pretrained model. Not all models support this.')
+parser.add_argument('--input-size', type=int,
+                    help='Set transform train and val. Samples are resized to '
+                    'input-size + 32.')
 
 data.custom.add_arguments(parser)
 
@@ -60,26 +65,9 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 
 # Data
 print('==> Preparing data..')
-transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-
-transform_test = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
 
 dataset = getattr(data, args.dataset)
-
-# , 'TinyImagenet200IncludeClasses'
-if args.dataset in ('TinyImagenet200', 'Imagenet1000'):
-    default_input_size = 64 if 'TinyImagenet200' in args.dataset else 224
-    input_size = args.input_size or default_input_size
-    transform_train = dataset.transform_train(input_size)
-    transform_test = dataset.transform_val(input_size)
+transform_train, transform_test = get_transform_from_name(args.dataset, dataset, args.input_size)
 
 dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
@@ -91,7 +79,7 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False,
 # Model
 print('==> Building model..')
 model = getattr(models, args.model)
-model_kwargs = {'num_classes': len(testset.classes) }
+model_kwargs = {'num_classes': len(testset.classes) + 40 }
 
 if args.pretrained:
     try:
@@ -152,11 +140,18 @@ def testhook(self, input, output):
     global hooked_inputs
     hooked_inputs = input[0].cpu().numpy()
 
-net.module.linear.register_forward_hook(testhook)
+keys = ['fc', 'linear']
+for key in keys:
+    fc = getattr(net.module, key, None)
+    if fc is not None:
+        break
+fc.register_forward_hook(testhook)
 
 net.eval()
 with torch.no_grad():
     for batch_idx, (inputs, targets) in enumerate(testloader):
+        if args.dataset in ("AnimalsWithAttributes2"):
+            inputs, predicates = inputs
         inputs = inputs.to(device)
         net(inputs)
 
@@ -169,7 +164,9 @@ with torch.no_grad():
                 sample_vectors.append(output)
 
     if args.plot_fc:
-        fc_weights = net.module.linear.weight.cpu().numpy()
+        fc_weights = fc.weight.cpu().numpy()
+        if len(args.plot_fc_specific) > 0:
+            fc_weights = fc_weights[args.plot_fc_specific]
         for i, row in enumerate(fc_weights):
             sample_vectors.append(row)
             samples_idx.append(i)
