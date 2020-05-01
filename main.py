@@ -42,6 +42,7 @@ parser.add_argument('--name', default='',
                     help='Name of experiment. Used for checkpoint filename')
 parser.add_argument('--pretrained', action='store_true',
                     help='Download pretrained model. Not all models support this.')
+parser.add_argument('--freeze-conv', action='store_true')
 parser.add_argument('--eval', help='eval only', action='store_true')
 parser.add_argument('--n-workers', help='num workers', default=2, type=int)
 
@@ -110,6 +111,10 @@ if args.pretrained:
         # net = model(pretrained=True, **model_kwargs)
         net = model(pretrained=True)
         # TODO: this is hardcoded
+        if args.freeze_conv:
+            for param in model.parameters():
+                param.requires_grad = False
+            net.fc.requires_grad = True
         if int(args.model[6:]) <= 34:
             net.fc = nn.Linear(512, model_kwargs['num_classes'])
         else:
