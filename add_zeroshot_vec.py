@@ -144,8 +144,12 @@ def testhook(self, input, output):
     global hooked_inputs
     hooked_inputs = input[0].cpu().numpy()
 
-
-net.module.linear.register_forward_hook(testhook)
+keys = ['fc', 'linear']
+for key in keys:
+    fc = getattr(net.module, key, None)
+    if fc is not None:
+        break
+fc.register_forward_hook(testhook)
 
 net.eval()
 
@@ -178,7 +182,8 @@ with torch.no_grad():
         cls_to_vec[cls] /= LA.norm(cls_to_vec[cls])
 
     # insert vectors into linear layer for model
-    fc_weights = net.module.linear.weight.cpu().numpy()
+
+    fc_weights = fc.weight.cpu().numpy()
 
     for i, cls in enumerate(trainset.classes):
         if cls in cls_to_vec:
@@ -190,8 +195,8 @@ with torch.no_grad():
             fc_weights[i] /= LA.norm(fc_weights[i])
         # else:
         #     assert all(fc_weights[i] == get_word_embedding(cls, trainset, args.dataset))
-    net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes))
-    net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights))
+    setattr(net.module, key, nn.Linear(fc_weights.shape[1], len(trainset.classes)))
+    setattr(getattr(net.module, key), "weight", nn.Parameter(torch.from_numpy(fc_weights)))
 
     # save model
     state = {
