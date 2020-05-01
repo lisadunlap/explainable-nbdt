@@ -87,6 +87,7 @@ testloader = torch.utils.data.DataLoader(testset, batch_size=min(args.batch_size
 # Model
 print('==> Building model..')
 model = getattr(models, args.model)
+Colors.cyan(f'Testing with dataset {args.dataset} and {len(testset.classes)} classes')
 if args.replace:
     model_kwargs = {'num_classes': len(testset.classes)}
 else:
@@ -99,7 +100,13 @@ else:
 if args.pretrained:
     try:
         print('==> Loading pretrained model..')
-        net = model(pretrained=True, **model_kwargs)
+        # net = model(pretrained=True, **model_kwargs)
+        net = model(pretrained=True)
+        # TODO: this is hardcoded
+        if int(args.model[6:]) <= 34:
+            net.fc = nn.Linear(512, model_kwargs['num_classes'])
+        else:
+            net.fc = nn.Linear(512*4, model_kwargs['num_classes'])
     except Exception as e:
         Colors.red(f'Fatal error: {e}')
         exit()
@@ -167,11 +174,12 @@ with torch.no_grad():
         for vec, label in zip(hooked_inputs, labels):
             num_samples = min([len(cls_to_vec[c]) for c in cls_to_vec])
             if num_samples >= args.num_samples:
+                print("found and breaking")
                 break
             cls_name = trainset.classes[label]
             if cls_name in cls_to_vec and len(cls_to_vec[cls_name]) < args.num_samples:
                 if args.word2vec:
-                    word_vec = get_saved_word2vec(word2vec_path + cls_name + '.npy', args.dimension, projection_matrix)
+                    word_vec = get_saved_word2vec(word2vec_path + cls_name + '.npy', args.dimension)
                     cls_to_vec[cls_name] = word_vec
                 else:
                     cls_to_vec[cls_name].append(vec)
