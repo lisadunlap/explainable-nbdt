@@ -187,6 +187,7 @@ with torch.no_grad():
 
     for cls in cls_to_vec:
         cls_to_vec[cls] = np.average(np.array(cls_to_vec[cls]), axis=0)
+        cls_to_vec[cls] -= np.mean(cls_to_vec[cls])
         cls_to_vec[cls] /= LA.norm(cls_to_vec[cls])
 
     # insert vectors into linear layer for model
