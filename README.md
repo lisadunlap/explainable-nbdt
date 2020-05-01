@@ -325,3 +325,8 @@ n02121620
 n04490091
 ```
 The format is exactly the same as the `wnids.txt` for the original dataset, except you only keep wnids for the remaining OOD classes. No need to change the `wnids.txt` for the original dataset.
+
+## Label Smoothing for Zero-Shot Learning
+Say that the associated zero-shot class of `dog` is `cat`; that is, you want to convert all dog labels from the one-hot vector `[0 0 0 0 1 0 0 0 0 0]` (with just `dog`) to the smoothed vector `[0 0 0.1 0 0.9 0 0 0 0 0]` (with 0.1 for the zero-shot class `cat` and 0.9 for the original class `dog`), so that you can use soft labels for cross-entropy loss. Then to your usual fine-tuning script, add the following flags: `--loss=SoftTreeSupLoss --label-smoothing=0.1 --seen-to-zsl "dog" "cat"` (currently only supported for `SoftTreeSupLoss`).
+
+The `label-smoothing` parameter controls what entries are placed into the main class index (`1-smoothing`) and the zero-shot class index (`smoothing`), and `seen-to-zsl` takes in pairs of class names (`--seen-to-zsl existing_class_1 zeroshot_class_1 existing_class_2 zeroshot_class_2 ...`), mapping each existing class to its zero shot class.
