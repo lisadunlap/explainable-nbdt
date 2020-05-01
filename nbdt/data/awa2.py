@@ -101,7 +101,7 @@ class AnimalsWithAttributes2(Dataset):
         self.labels = np.array(self.labels, np.int64)
         print("# images found at path '%s': %d" % (self.labels_path, self.images.shape[0]))
 
-        wnid_to_class = self.setup_custom_wnids(root)
+        # wnid_to_class = self.setup_custom_wnids(root)
 
 
     def __len__(self): 

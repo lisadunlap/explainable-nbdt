@@ -22,12 +22,14 @@ from PIL.ImageColor import getcolor
 from numpy import linalg as LA
 
 from nbdt.utils import (
-    generate_fname, populate_kwargs, Colors, get_saved_word2vec, DATASET_TO_FOLDER_NAME, get_word_embedding
+    generate_fname, populate_kwargs, Colors, get_saved_word2vec, DATASET_TO_FOLDER_NAME, get_word_embedding, get_transform_from_name
 )
 
-datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
+datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.awa2.names
 
 parser = argparse.ArgumentParser(description='T-SNE vis generation')
+parser.add_argument('--batch-size', default=512, type=int,
+                    help='Batch size used for training')
 parser.add_argument('--dataset', default='CIFAR10', choices=datasets)
 parser.add_argument('--model', default='ResNet18', choices=list(models.get_model_choices()))
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
@@ -45,6 +47,9 @@ parser.add_argument('--new-classes', nargs='*',
                     help='New class names used for zero-shot.')
 parser.add_argument('--new-labels', nargs='*', type=int,
                     help='New class indices used for zero-shot.')
+parser.add_argument('--input-size', type=int,
+                    help='Set transform train and val. Samples are resized to '
+                    'input-size + 32.')
 
 parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
@@ -65,19 +70,10 @@ start_epoch = 0  # start from epoch 0 or last checkpoint epoch
 # Data
 print('==> Preparing data..')
 
-transform_test = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
 
 dataset = getattr(data, args.dataset)
 
-# , 'TinyImagenet200IncludeClasses'
-if args.dataset in ('TinyImagenet200', 'Imagenet1000'):
-    default_input_size = 64 if 'TinyImagenet200' in args.dataset else 224
-    input_size = args.input_size or default_input_size
-    transform_train = dataset.transform_train(input_size)
-    transform_test = dataset.transform_val(input_size)
+transform_train, transform_test = get_transform_from_name(args.dataset, dataset, args.input_size)
 
 dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
@@ -85,12 +81,13 @@ populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
 
 trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_test)
 testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=100, shuffle=False, num_workers=0)
-testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=0)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=min(args.batch_size, 100), shuffle=False, num_workers=0)
+testloader = torch.utils.data.DataLoader(testset, batch_size=min(args.batch_size, 100), shuffle=False, num_workers=0)
 
 # Model
 print('==> Building model..')
 model = getattr(models, args.model)
+Colors.cyan(f'Testing with dataset {args.dataset} and {len(testset.classes)} classes')
 if args.replace:
     model_kwargs = {'num_classes': len(testset.classes)}
 else:
@@ -103,7 +100,13 @@ else:
 if args.pretrained:
     try:
         print('==> Loading pretrained model..')
-        net = model(pretrained=True, **model_kwargs)
+        # net = model(pretrained=True, **model_kwargs)
+        net = model(pretrained=True)
+        # TODO: this is hardcoded
+        if int(args.model[6:]) <= 34:
+            net.fc = nn.Linear(512, model_kwargs['num_classes'])
+        else:
+            net.fc = nn.Linear(512*4, model_kwargs['num_classes'])
     except Exception as e:
         Colors.red(f'Fatal error: {e}')
         exit()
@@ -148,8 +151,12 @@ def testhook(self, input, output):
     global hooked_inputs
     hooked_inputs = input[0].cpu().numpy()
 
-
-net.module.linear.register_forward_hook(testhook)
+keys = ['fc', 'linear']
+for key in keys:
+    fc = getattr(net.module, key, None)
+    if fc is not None:
+        break
+fc.register_forward_hook(testhook)
 
 net.eval()
 
@@ -160,11 +167,14 @@ if args.word2vec:
 num_samples = 0
 with torch.no_grad():
     for i, (inputs, labels) in enumerate(trainloader):
+        if args.dataset in ("AnimalsWithAttributes2"):
+            inputs, predicates = inputs
         net(inputs)
 
         for vec, label in zip(hooked_inputs, labels):
             num_samples = min([len(cls_to_vec[c]) for c in cls_to_vec])
             if num_samples >= args.num_samples:
+                print("found and breaking")
                 break
             cls_name = trainset.classes[label]
             if cls_name in cls_to_vec and len(cls_to_vec[cls_name]) < args.num_samples:
@@ -180,7 +190,9 @@ with torch.no_grad():
         cls_to_vec[cls] /= LA.norm(cls_to_vec[cls])
 
     # insert vectors into linear layer for model
-    fc_weights = net.module.linear.weight.cpu().numpy()
+
+    fc_weights = fc.weight.cpu().numpy()
+
     for i, cls in enumerate(trainset.classes):
         if cls in cls_to_vec:
             if args.replace:
@@ -191,8 +203,8 @@ with torch.no_grad():
             fc_weights[i] /= LA.norm(fc_weights[i])
         # else:
         #     assert all(fc_weights[i] == get_word_embedding(cls, trainset, args.dataset))
-    net.module.linear = nn.Linear(fc_weights.shape[1], len(trainset.classes))
-    net.module.linear.weight = nn.Parameter(torch.from_numpy(fc_weights))
+    setattr(net.module, key, nn.Linear(fc_weights.shape[1], len(trainset.classes)))
+    setattr(getattr(net.module, key), "weight", nn.Parameter(torch.from_numpy(fc_weights)))
 
     # save model
     state = {
