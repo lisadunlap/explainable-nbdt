@@ -33,7 +33,7 @@ DATASET_TO_FOLDER_NAME = {
     'Imagenet1000' : 'imagenet-1000',
     'TinyImagenet200CombineClasses': 'tiny-imagenet-200-custom-combined',
     'MiniPlaces': 'miniplaces',
-    'AnimalsWithAttributes2': 'awa2',
+    'AnimalsWithAttributes2': 'Animals_with_Attributes2',
     'CUB2011': 'CUB_200_2011'
 }
 
@@ -50,8 +50,8 @@ DEFAULT_IMAGENET1000_TREE = './data/imagenet-1000/graph-wordnet-single.json'
 DEFAULT_IMAGENET1000_WNIDS = './data/imagenet-1000/wnids.txt'
 DEFAULT_MINIPLACES_TREE = '/data/miniplaces/graph-default.json'
 DEFAULT_MINIPLACES_WNID = './data/miniplaces/wnids.txt'
-DEFAULT_AWA2_TREE = '/data/awa2/graph-default.json'
-DEFAULT_AWA2_WNID = './data/awa2/wnids.txt'
+DEFAULT_AWA2_TREE = '/data/Animals_with_Attributes2/graph-default.json'
+DEFAULT_AWA2_WNID = './data/Animals_with_Attributes2/wnids.txt'
 DEFAULT_CUB_TREE = '/data/CUB_200_2011/graph-default.json'
 DEFAULT_CUB_WNID = './data/CUB_200_2011/wnids.txt'
 
@@ -135,7 +135,7 @@ def populate_kwargs(args, kwargs, object, name='Dataset', keys=(), globals={}):
                 f'{key}: {value}')
 
 
-def get_transform_from_name(dataset_name, dataset, input_size):
+def get_transform_from_name(dataset_name, dataset, input_size=32):
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
         transforms.RandomHorizontalFlip(),

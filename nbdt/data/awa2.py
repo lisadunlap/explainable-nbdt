@@ -22,9 +22,9 @@ class AnimalsWithAttributes2(Dataset):
     """
 
     def __init__(self, root, transform=None, train=True, download=False, shuffle=False, binary=True, zeroshot_dataset=False,
-                 drop_classes=False, **kwargs):
+                 drop_classes=Falsgit e, **kwargs):
         # load in the data, we ignore test case, only train/val
-        self.root = os.path.join(root, 'awa2')
+        self.root = os.path.join(root, 'Animals_with_Attributes2')
         labels_fname = 'trainclasses.txt' if not zeroshot_dataset else 'testclasses.txt'
         matrix_fname = 'predicate-matrix-binary.txt' if binary else 'predicate-matrix-continuous.txt'
 
