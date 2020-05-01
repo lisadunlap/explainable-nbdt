@@ -112,7 +112,7 @@ if args.pretrained:
         net = model(pretrained=True)
         # TODO: this is hardcoded
         if args.freeze_conv:
-            for param in model.parameters():
+            for param in net.parameters():
                 param.requires_grad = False
             net.fc.requires_grad = True
         if int(args.model[6:]) <= 34:
