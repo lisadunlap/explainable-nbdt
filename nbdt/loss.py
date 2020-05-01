@@ -165,18 +165,23 @@ class SoftTreeSupLoss(HardTreeSupLoss):
             used for label smoothing
             example: {'dog': 'cat', 'horse': 'zebra'}
             label_smoothing: used for label smoothing, use 0 to disable """
+        if seen_to_zsl_cls:
+            # cross entropy loss with soft labels
+            criterion = lambda output, target: torch.mean(torch.sum(-target * output.log_softmax(dim=-1), dim=-1))
+
         super().__init__(path_graph, path_wnids, classes, max_leaves_supervised, min_leaves_supervised,
             tree_supervision_weight, weighted_average, criterion)
         self.seen_to_zsl_cls = seen_to_zsl_cls
         self.smoothing = label_smoothing
         self.classes = classes
 
+
     def forward(self, outputs, targets):
         smoothed_targets = smooth_one_hot(targets, self.classes, self.seen_to_zsl_cls, self.smoothing)
-        loss = self.criterion(outputs, targets)
+        loss = self.criterion(outputs, smoothed_targets)
         bayesian_outputs = SoftTreeSupLoss.inference(
             self.nodes, outputs, self.num_classes, self.weighted_average)
-        loss += self.criterion(bayesian_outputs, targets) * self.tree_supervision_weight
+        loss += self.criterion(bayesian_outputs, smoothed_targets) * self.tree_supervision_weight
         return loss
 
     @classmethod

@@ -441,13 +441,13 @@ def smooth_one_hot(labels, classes, seen_to_zsl_cls, smoothing=0.0):
 
     smooth_label = smooth_one_hot(labels, ...)
     loss = (outputs, smooth_label) """
-    if smoothing == 0 or not seen_to_zsl_cls:
-        return labels
-
     assert 0 <= smoothing < 1
     num_classes = len(classes)
     label_shape = torch.Size((labels.size(0), num_classes))
     confidence = 1.0 - smoothing
+
+    if smoothing == 0 or not seen_to_zsl_cls:
+        return torch.zeros_like(label_shape).scatter_(1, labels.data.unsqueeze(1), confidence)
 
     with torch.no_grad():
         true_dist = torch.zeros(size=label_shape, device=labels.device)
