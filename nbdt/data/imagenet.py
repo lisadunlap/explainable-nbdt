@@ -6,6 +6,7 @@ import zipfile
 import urllib.request
 import shutil
 import torch
+from PIL import Image
 
 
 
@@ -169,41 +170,54 @@ class _Imagenet1000Val(datasets.ImageFolder):
         super().__init__(os.path.join(root, 'imagenet-1000/val'), *args, **kwargs)
 
 class MiniImagenet(Dataset):
-    """ImageNet dataloader"""
+    """MiniImageNet dataloader (need to have already downloaded imagenet and
+    exracted mini imagenet or download from: 
+    https://drive.google.com/drive/folders/137M9jEv8nw0agovbUiEN_fPl_waJ2jIj"""
 
     dataset = None
 
     def __init__(self, root='../mini-imagenet-tools/processed_images',
-            *args, train=True, download=False, zeroshot=False, **kwargs):
+            *args, train=True, zeroshot=False, **kwargs):
         super().__init__()
 
-        dataset = _MiniImagenetTrain if train else _MiniImagenetVal
         self.root = root
-        self.dataset = dataset(root, *args, **kwargs)
-        self.classes = self.dataset.classes
-        if not zeroshot:
-            train_len = int(.8 * len(self.dataset))
-            trainset, testset = torch.utils.data.random_split(self.dataset, [train_len, len(self.dataset)-train_len])
-            if train:
-                self.dataset = trainset
-            else:
-                self.dataset = testset
-        # self.classes = self.dataset.classes
-        if zeroshot:
-            self.classes = self.get_classes()
+        if train:
+            self.transform = self.transform_train()
+        else:
+            self.transform = self.transform_val()
+        self.zeroshot = zeroshot
+        self.classes = self.get_classes()
         self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
         self.train = train
-        self.zeroshot = zeroshot
+        print("getting paths")
+        self.get_paths()
 
     def get_classes(self):
         classes = []
-        classes_path = self.root.replace('train', '').replace('val', '') + '/classes.txt'
-        print(classes_path)
+        if not self.zeroshot:
+            classes_path = self.root.replace('train', '').replace('val', '') + '/classes_train.txt'
+        else:
+            classes_path = self.root.replace('train', '').replace('val', '') + '/classes.txt'
         with open(classes_path, 'r') as f:
             for i, line in enumerate(f):
                 cls = line.strip().split('\t')
                 classes += cls
         return classes
+
+    def get_paths(self):
+        self.paths = []
+        self.path_to_class = {}
+        if self.zeroshot:
+            classes_path = self.root.replace('train', '').replace('val', '') + '/zeroshot_paths.txt'
+        elif self.train:
+            classes_path = self.root.replace('train', '').replace('val', '')+'/train_paths.txt'
+        else:
+            classes_path = self.root.replace('train', '').replace('val', '') + '/test_paths.txt'
+        with open(classes_path) as f:
+            for line in f.readlines():
+                path = line.strip()
+                self.paths.append(path)
+                self.path_to_class[path] = self.classes.index(path.split('/')[-2])
 
     @staticmethod
     def transform_train(input_size=84):
@@ -224,26 +238,10 @@ class MiniImagenet(Dataset):
         ])
 
     def __getitem__(self, i):
-        if self.zeroshot:
-            return self.dataset[i][0], self.dataset[i][1]+64
-        return self.dataset[i]
+        image = Image.open(self.paths[i])
+        label = self.path_to_class[self.paths[i]]
+        image = self.transform(image)
+        return image, label
 
     def __len__(self):
-        return len(self.dataset)
-
-class _MiniImagenetTrain(datasets.ImageFolder):
-
-    def __init__(self, root='../mini-imagenet-tools/processed_images', zeroshot=False, *args, **kwargs):
-        if zeroshot:
-            super().__init__(os.path.join(root, 'test'), *args, **kwargs)
-        else:
-            super().__init__(os.path.join(root, 'train'), *args, **kwargs)
-
-
-class _MiniImagenetVal(datasets.ImageFolder):
-
-    def __init__(self, root='../mini-imagenet-tools/processed_images', zeroshot=False, *args, **kwargs):
-        if zeroshot:
-            super().__init__(os.path.join(root, 'test'), *args, **kwargs)
-        else:
-            super().__init__(os.path.join(root, 'train'), *args, **kwargs)
+        return len(self.paths)

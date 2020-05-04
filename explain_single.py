@@ -93,8 +93,12 @@ dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
     keys=data.custom.keys, globals=globals())
 
-testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
-trainset=testset
+if args.dataset == 'MiniImagenet':
+    trainset = dataset(**dataset_kwargs, root='../mini-imagenet-tools/processed_images', train=True, download=True, transform=transform_train)
+    testset = trainset
+else:
+    testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
+    trainset=testset
 
 testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=2)
 

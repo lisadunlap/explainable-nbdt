@@ -98,7 +98,9 @@ Colors.cyan(f'Testing with dataset {args.dataset} and {len(testset.classes)} cla
 if args.replace:
     model_kwargs = {'num_classes': len(testset.classes)}
 else:
-    if args.new_classes is not None:
+    if args.dataset == 'MiniImagenet':
+        n_new_classes = 20
+    elif args.new_classes is not None:
         n_new_classes = len(args.new_classes)
     else:
         n_new_classes = len(args.new_labels)
@@ -148,10 +150,14 @@ if args.resume:
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
 # get one sample of each zeroshot class, and get its output at linear layer
-if args.new_classes is None:
-    cls_to_vec = {cls: [] for i, cls in enumerate(trainset.classes) if i in args.new_labels}
+if args.dataset == 'MiniImagenet':
+    cls_to_vec = {trainset.classes[cls]:[] for i, cls in enumerate(list(range(64, 84)))}
+elif args.new_classes is None:
+    cls_to_vec = {cls: [] for i, cls in enumerate(testset.classes) if i in args.new_labels}
 else:
     cls_to_vec = {cls: [] for cls in args.new_classes}
+
+print(cls_to_vec)
 hooked_inputs = None
 
 def testhook(self, input, output):
