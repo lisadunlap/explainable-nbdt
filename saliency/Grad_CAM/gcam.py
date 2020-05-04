@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from tqdm import tqdm
+from nbdt.loss import HardTreeSupLoss
 
 
 class _BaseWrapper(object):
@@ -30,12 +31,13 @@ class _BaseWrapper(object):
         one_hot.scatter_(1, ids, 1.0)
         return one_hot
 
-    def forward(self, image):
+    def forward(self, image, node):
         """
         Simple classification
         """
         self.model.zero_grad()
-        self.logits = self.model(image)
+        outputs = self.model(image)
+        self.logits = HardTreeSupLoss.get_output_sub(outputs, node)
         self.probs = F.softmax(self.logits, dim=1)
         return self.probs.sort(dim=1, descending=True)
 
@@ -153,9 +155,9 @@ class GradCAM(_BaseWrapper):
     def _compute_grad_weights(self, grads):
         return F.adaptive_avg_pool2d(grads, 1)
 
-    def forward(self, image):
+    def forward(self, image, node):
         self.image_shape = image.shape[2:]
-        return super(GradCAM, self).forward(image)
+        return super(GradCAM, self).forward(image, node)
 
     def generate(self, target_layer):
         fmaps = self._find(self.fmap_pool, target_layer)

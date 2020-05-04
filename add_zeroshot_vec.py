@@ -187,6 +187,7 @@ with torch.no_grad():
 
     for cls in cls_to_vec:
         cls_to_vec[cls] = np.average(np.array(cls_to_vec[cls]), axis=0)
+        cls_to_vec[cls] -= np.mean(cls_to_vec[cls])
         cls_to_vec[cls] /= LA.norm(cls_to_vec[cls])
 
     # insert vectors into linear layer for model
@@ -200,6 +201,7 @@ with torch.no_grad():
             else:
                 fc_weights = np.insert(fc_weights, i, cls_to_vec[cls], axis=0)
         else:
+            fc_weights[i] -= np.mean(fc_weights[i])
             fc_weights[i] /= LA.norm(fc_weights[i])
         # else:
         #     assert all(fc_weights[i] == get_word_embedding(cls, trainset, args.dataset))

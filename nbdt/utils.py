@@ -411,6 +411,24 @@ def test_word2vec(net, trainset, dataset_name='CIFAR10', exclude_classes=None, d
             assert all(fc_weights[i] == word_vec)
     Colors.cyan("Freezing certain FC rows check passed!")
 
+def normalize_weights(net, pretrained=True):
+    """ Check that word2vec weights are frozen in ZS rows """
+    net.eval()
+
+    if pretrained:
+        layer = net.module.fc
+    else:
+        layer = net.module.linear
+
+    # get FC weights
+    fc_weights = layer.weight.detach().cpu().numpy()
+    for i in range(len(fc_weights)):
+        fc_weights[i] -= np.mean(fc_weights[i])
+        fc_weights[i] /= LA.norm(fc_weights[i])
+    layer.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
+    layer.weight.requires_grad = False
+    return net
+
 class LabelSmoothingLoss(nn.Module):
     def __init__(self, classes, smoothing=0.0, dim=-1):
         super(LabelSmoothingLoss, self).__init__()

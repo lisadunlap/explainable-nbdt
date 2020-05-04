@@ -15,7 +15,7 @@ import wandb
 import models
 from nbdt.utils import (
     progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors, word2vec_model,
-    get_transform_from_name, test_word2vec
+    get_transform_from_name, normalize_weights
 )
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.awa2.names + data.cub.names + data.miniplaces.names
@@ -43,6 +43,7 @@ parser.add_argument('--name', default='',
 parser.add_argument('--pretrained', action='store_true',
                     help='Download pretrained model. Not all models support this.')
 parser.add_argument('--freeze-conv', action='store_true')
+parser.add_argument('--normalize', action='store_true')
 parser.add_argument('--eval', help='eval only', action='store_true')
 parser.add_argument('--n-workers', help='num workers', default=2, type=int)
 
@@ -72,7 +73,7 @@ experiment_name = args.experiment_name if args.experiment_name \
     else '{}-{}-{}-{}'.format(args.model, args.dataset, args.loss, args.analysis)
 
 if args.wandb:
-    wandb.init(project=experiment_name, name='main')
+    wandb.init(project=experiment_name, name='main', entity='lisadunlap')
     wandb.config.update({
         k: v for k, v in vars(args).items() if (isinstance(v, str) or isinstance(v, int) or isinstance(v, float))
     })
@@ -162,6 +163,8 @@ elif args.path_resume:
         net.load_state_dict(checkpoint['net'])
         Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
+if args.normalize:
+    net = normalize_weights(net, pretrained=args.pretrained)
 
 if args.word2vec:
     net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset,

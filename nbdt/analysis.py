@@ -18,11 +18,17 @@ import os
 import json
 import wandb
 import pandas as pd
+from saliency.RISE.explanations import RISE
+from saliency.RISE.utils import get_cam
+from saliency.Grad_CAM.gcam import GradCAM
+from PIL import Image
+import cv2
 
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference', 'HardFullTreePrior', 'HardTrackNodes', 'SoftFullTreePrior', 'SoftFullTreeOODPrior')
+    'SingleInference', 'HardFullTreePrior', 'HardTrackNodes', 'SoftFullTreePrior', 'SoftFullTreeOODPrior',
+    'SingleRISE', 'SingleGradCAM')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
         'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path', 'ignore_labels',
         'oodset', 'ood_path_wnids')
@@ -254,9 +260,11 @@ class SingleInference(HardEmbeddedDecisionRules):
             weighted_average=False, use_wandb=False, run_name="SingleInference"):
         super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
                          run_name=run_name)
+        get_path = lambda wnid: nx.shortest_path(self.G, source=get_root(self.G), target=wnid)
+        self.paths = {self.wnid_to_class[wnid]: get_path(wnid) for wnid in self.wnids}
         self.num_classes = len(trainset.classes)
 
-    def single_traversal(self, _, wnid_to_pred_selector, n_samples):
+    def single_traversal(self, _, wnid_to_pred_selector):
         wnid_root = get_root(self.G)
         node_root = self.wnid_to_node[wnid_root]
         wnid, node = wnid_root, node_root
@@ -273,21 +281,20 @@ class SingleInference(HardEmbeddedDecisionRules):
             node = self.wnid_to_node.get(wnid, None)
         return path
 
-    def inf(self, img):
+    def inf(self, img, outputs):
         wnid_to_pred_selector = {}
         for node in self.nodes:
             outputs_sub = HardTreeSupLoss.get_output_sub(
-                img, node, self.weighted_average)
+                outputs, node, self.weighted_average)
             selector = [1 for c in range(node.num_classes)]
             if not any(selector):
                 continue
             _, preds_sub = torch.max(outputs_sub, dim=1)
             preds_sub = list(map(int, preds_sub.cpu()))
             wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
-        n_samples = 1
         predicted = self.single_traversal(
-            [], wnid_to_pred_selector, n_samples)
-        wandb.log({"examples": [wandb.Image(img.cpu().numpy(), caption=str(predicted))]})
+            [], wnid_to_pred_selector)
+        wandb.log({"examples": [wandb.Image(torch.squeeze(img).cpu().numpy().transpose((1, 2, 0)), caption=str(predicted))]})
         cls = self.wnid_to_class.get(predicted[-1], None)
         pred = -1 if cls is None else self.classes.index(cls)
         print("class: ", pred)
@@ -673,3 +680,150 @@ class SoftFullTreeOODPrior(SoftFullTreePrior):
             with open(cls_path, 'w') as f:
                 json.dump(json_data, f)
             print("Json saved to %s" % cls_path)
+
+class SingleRISE(SingleInference):
+    """Generate RISE saliency map for a single image ."""
+
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, net,
+            weighted_average=False, use_wandb=True, run_name="SingleRISE"):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb=use_wandb,
+                         run_name=run_name)
+        try:
+            H,L,W=trainset[0][0].shape
+        except:
+            H, L, W = trainset[0][0][0].shape
+        print("INPUT SIZE: ", (L,W))
+        self.net = net
+        self.rise = RISE(net, input_size=(L,W))
+        self.use_wandb = True
+
+    def inf(self, img, outputs):
+        print("=====> starting RISE", img.shape)
+        wnid_to_pred_selector = {}
+        wnid_to_rise = {}
+        examples, sals = [], []
+        for node in self.nodes:
+            outputs_sub = HardTreeSupLoss.get_output_sub(
+                outputs, node, self.weighted_average)
+            outputs_sub = nn.functional.softmax(outputs_sub, dim=1)
+            selector = [1 for c in range(node.num_classes)]
+            if not any(selector):
+                continue
+            _, preds_sub = torch.max(outputs_sub, dim=1)
+            preds_sub = list(map(int, preds_sub.cpu()))
+            wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
+
+        predicted = self.single_traversal(
+            [], wnid_to_pred_selector)
+        for node in self.nodes:
+            if node.wnid in predicted:
+                print("Generating Rise for ", node.wnid)
+                rise_saliency = self.rise.explain_instance(img, node, self.weighted_average)
+                wnid_to_rise[node.wnid] = rise_saliency
+        if self.use_wandb:
+            print("log image")
+            wandb.log({"examples": [wandb.Image(torch.squeeze(img).cpu().numpy().transpose((1, 2, 0)),
+                                                caption=str(predicted))]})
+        cls = self.wnid_to_class.get(predicted[-1], None)
+        pred = -1 if cls is None else self.classes.index(cls)
+        print("class: ", pred)
+        print("inference: ", predicted)
+
+        for wnid, rise_output in wnid_to_rise.items():
+            overlay = get_cam(torch.squeeze(img), rise_output.cpu().detach().numpy())
+            sals.append(wandb.Image(overlay, caption=f"RISE (wnid={wnid}, idx={predicted.index(wnid)})"))
+            if not os.path.exists("./out/RISE/"):
+                os.makedirs("./out/RISE/")
+            if not cv2.imwrite(f"./out/RISE/RISE_{wnid}.jpg", overlay):
+                print("ERROR writing image to file")
+        if self.use_wandb:
+            print("logging")
+            wandb.log({"rise examples": sals})
+
+class SingleGradCAM(SingleInference):
+    """Generate RISE saliency map for a single image ."""
+
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, net,
+            weighted_average=False, use_wandb=True, run_name="SingleGradCAM"):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb=use_wandb,
+                         run_name=run_name)
+        try:
+            H,L,W=trainset[0][0].shape
+        except:
+            H, L, W = trainset[0][0][0].shape
+        print("INPUT SIZE: ", (L,W))
+        self.net = net
+        self.gcam = GradCAM(model=net)
+        self.use_wandb = True
+
+    def inf(self, img, outputs):
+        wnid_to_pred_selector = {}
+        wnid_to_rise = {}
+        examples, sals = [], []
+        for node in self.nodes:
+            outputs_sub = HardTreeSupLoss.get_output_sub(
+                outputs, node, self.weighted_average)
+            outputs_sub = nn.functional.softmax(outputs_sub, dim=1)
+            selector = [1 for c in range(node.num_classes)]
+            if not any(selector):
+                continue
+            _, preds_sub = torch.max(outputs_sub, dim=1)
+            preds_sub = list(map(int, preds_sub.cpu()))
+            rise_saliency = self.gen_gcam(img, node)
+            wnid_to_rise[node.wnid] = rise_saliency
+            wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
+
+        predicted = self.single_traversal(
+            [], wnid_to_pred_selector)
+        for node in self.nodes:
+            if node.wnid in predicted:
+                print("Generating GradCAM for ", node.wnid)
+
+                rise_saliency = self.gen_gcam(img, node)
+                wnid_to_rise[node.wnid] = rise_saliency
+        if self.use_wandb:
+            print("log image")
+            wandb.log({"examples": [wandb.Image(torch.squeeze(img).cpu().numpy().transpose((1, 2, 0)),
+                                                caption=str(predicted))]})
+        cls = self.wnid_to_class.get(predicted[-1], None)
+        pred = -1 if cls is None else self.classes.index(cls)
+        print("class: ", pred)
+        print("inference: ", predicted)
+
+        for wnid, rise_output in wnid_to_rise.items():
+            overlay = get_cam(torch.squeeze(img), rise_output)
+            #sals.append(wandb.Image(overlay, caption=f"GradCAM (wnid={wnid}, idx={predicted.index(wnid)})"))
+            if wnid in predicted:
+                sals.append(wandb.Image(overlay, caption=f"GradCAM (idx={predicted.index(wnid)})"))
+            else:
+                sals.append(wandb.Image(overlay, caption=f"GradCAM (wnid={wnid})"))
+            if not os.path.exists("./out/GradCAM/"):
+                os.makedirs("./out/GradCAM/")
+            if not cv2.imwrite(f"./out/GradCAM/GradCAM_{wnid}.jpg", overlay):
+                print("ERROR writing image to file")
+        if self.use_wandb:
+            print("logging")
+            wandb.log({"gcam examples": sals})
+
+    def gen_gcam(self, img, node, target_index=1):
+        """
+        Visualize model responses given multiple images
+        """
+
+        # Get model and forward pass
+        probs, ids = self.gcam.forward(img, node)
+
+        for i in range(target_index):
+            # Grad-CAM
+            self.gcam.backward(ids=ids[:, [i]])
+            regions = self.gcam.generate(target_layer='module.layer3')
+            masks = []
+            for j in range(len(img)):
+
+                # Grad-CAM
+                mask = regions[j, 0].cpu().numpy()
+                masks += [mask]
+        if len(masks) == 1:
+            return masks[0]
+        self.gcam.remove_hook()
+        return masks
