@@ -589,6 +589,7 @@ class SoftTrackDepth(SoftFullTreePrior):
         return self.depth_counts
 
     def end_test(self, epoch):
+        self.calculate_depth_metrics()
         print("===> Depth metrics:")
         for cls, depth_dict in self.depth_counts.items():
             print(f"{cls}: {depth_dict["ratio"]} ({depth_dict["depth"]} / {depth_dict["total"]})")
