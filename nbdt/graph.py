@@ -201,6 +201,10 @@ def get_leaf_weights(G, node, weight=1):
             weights[wnid] = weights.get(wnid, 0) + weight
     return weights
 
+def get_path_to_node(G, node):
+    """ Return path from G.root to node, as a list of traversed node wnid's. """
+    return [node.wnid for node in nx.shortest_path(G, source=get_root(G), target=node)]
+
 
 def set_node_label(G, synset):
     nx.set_node_attributes(G, {

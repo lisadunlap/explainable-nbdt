@@ -1,4 +1,4 @@
-from nbdt.graph import get_root, get_roots, get_wnids, synset_to_name, wnid_to_synset, get_leaves
+from nbdt.graph import get_root, get_roots, get_wnids, synset_to_name, wnid_to_synset, get_leaves, get_path_to_node
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
     DEFAULT_CIFAR100_WNIDS, DEFAULT_TINYIMAGENET200_TREE,
@@ -558,6 +558,63 @@ class SoftFullTreePrior(HardFullTreePrior):
                 except:
                     self.node_counts[self.classes[target_classes[index]]][wnid] += 1
         return [self.wnids[i] for i in wnid_to_pred_selector]
+
+class SoftTrackDepth(SoftFullTreePrior):
+
+    """ Track depth metric with SoftFullTreePrior
+     """
+
+    def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, ignore_labels=[],
+                 json_save_path='./out/soft_track_depth/', csv_save_path='./out/soft_track_depth/cifar10.csv',
+                 weighted_average=False, use_wandb=False, run_name="SoftTrackDepth"):
+        super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, ignore_labels,
+                 json_save_path, csv_save_path, weighted_average, use_wandb, run_name)
+
+    def calculate_depth_metrics(self):
+        self.depth_counts = {cls: {"depth": 0, "total": 0} for cls in self.classes}
+        for cls in self.classes:
+            cls_counts = self.node_counts[cls] # {node.wnid:0 for node in self.nodes}
+            cls_node = self.wnid_to_node[self.class_to_wnid[cls]]
+            true_path_wnids = get_path_to_node(self.G, cls_node) 
+
+            cls_depth_count, cls_total_count = 0, 0
+            for node in true_path_wnids:
+                cls_depth_count += cls_counts.get(node, 0)
+                cls_total_count += self.class_counts[cls]
+            self.depth_counts[cls] = {
+                "depth": cls_depth_count, 
+                "total": cls_total_count, 
+                "ratio": cls_depth_count / cls_total_count,
+            }
+        return self.depth_counts
+
+    def end_test(self, epoch):
+        print("===> Depth metrics:")
+        for cls, depth_dict in self.depth_counts.items():
+            print(f"{cls}: {depth_dict["ratio"]} ({depth_dict["depth"]} / {depth_dict["total"]})")
+        total_depth_counts = sum(d["depth"] for d in self.depth_counts.values())
+        total_counts = sum(d["total"] for d in self.depth_counts.values())
+        print(f"Total: {total_depth_counts / total_counts} ({total_depth_counts} / {total_counts}")
+
+    # def write_to_csv(self, path):
+    #     columns = {node:[] for node in get_leaves(self.G)}
+    #     for cls in self.classes:
+    #         for node in get_leaves(self.G):
+    #             if node in self.leaf_counts[cls]:
+    #                 columns[node].append(self.leaf_counts[cls][node])
+    #             else:
+    #                 columns[node].append(0)
+    #     new_columns = {}
+    #     for node in get_leaves(self.G):
+    #         new_columns["%s %s" % (synset_to_name(wnid_to_synset(node)), node)] = columns[node]
+    #     try:
+    #         int(self.classes[1:])
+    #         index = [self.wnid_to_name[cls] for cls in self.classes]
+    #     except:
+    #         index = [cls for cls in self.classes]
+    #     df = pd.DataFrame(data=new_columns, index=index)
+    #     df.to_csv(path)
+    #     print("CSV saved to %s" % path)
 
 class SoftFullTreeOODPrior(SoftFullTreePrior):
 
