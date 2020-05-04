@@ -769,8 +769,6 @@ class SingleGradCAM(SingleInference):
                 continue
             _, preds_sub = torch.max(outputs_sub, dim=1)
             preds_sub = list(map(int, preds_sub.cpu()))
-            rise_saliency = self.gen_gcam(img, node)
-            wnid_to_rise[node.wnid] = rise_saliency
             wnid_to_pred_selector[node.wnid] = (preds_sub, selector)
 
         predicted = self.single_traversal(

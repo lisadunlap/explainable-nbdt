@@ -21,7 +21,7 @@ from pathlib import Path
 # tree-generation consntants
 METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node', 'induced-attributes')
 DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000',
-            'TinyImagenet200CombineClasses', 'MiniPlaces', 'AnimalsWithAttributes2', 'CUB2011')
+            'TinyImagenet200CombineClasses', 'MiniPlaces', 'AnimalsWithAttributes2', 'CUB2011', 'MiniImagenet')
 
 DATASET_TO_FOLDER_NAME = {
     'CIFAR10': 'CIFAR10',
@@ -33,8 +33,9 @@ DATASET_TO_FOLDER_NAME = {
     'Imagenet1000' : 'imagenet-1000',
     'TinyImagenet200CombineClasses': 'tiny-imagenet-200-custom-combined',
     'MiniPlaces': 'miniplaces',
-    'AnimalsWithAttributes2': 'awa2',
-    'CUB2011': 'CUB_200_2011'
+    'AnimalsWithAttributes2': 'Animals_with_Attributes2',
+    'CUB2011': 'CUB_200_2011',
+    'MiniImagenet': '../mini-imagenet-tools/processed_images'
 }
 
 # main script constants
@@ -50,10 +51,12 @@ DEFAULT_IMAGENET1000_TREE = './data/imagenet-1000/graph-wordnet-single.json'
 DEFAULT_IMAGENET1000_WNIDS = './data/imagenet-1000/wnids.txt'
 DEFAULT_MINIPLACES_TREE = '/data/miniplaces/graph-default.json'
 DEFAULT_MINIPLACES_WNID = './data/miniplaces/wnids.txt'
-DEFAULT_AWA2_TREE = '/data/awa2/graph-default.json'
-DEFAULT_AWA2_WNID = './data/awa2/wnids.txt'
+DEFAULT_AWA2_TREE = '/data/Animals_with_Attributes2/graph-default.json'
+DEFAULT_AWA2_WNID = './data/Animals_with_Attributes2/wnids.txt'
 DEFAULT_CUB_TREE = '/data/CUB_200_2011/graph-default.json'
 DEFAULT_CUB_WNID = './data/CUB_200_2011/wnids.txt'
+DEFAULT_MiniImagenet_TREE = '../mini-imagenet-tools/processed_images/graph-default.json'
+DEFAULT_MiniImagenet_WNID = '../mini-imagenet-tools/processed_images/wnids.txt'
 
 
 DATASET_TO_PATHS = {
@@ -84,6 +87,10 @@ DATASET_TO_PATHS = {
     'CUB2011': {
         'path_graph': DEFAULT_CUB_TREE,
         'path_wnids': DEFAULT_CUB_WNID
+    },
+    'MiniImagenet': {
+        'path_graph': DEFAULT_MiniImagenet_TREE,
+        'path_wnids': DEFAULT_MiniImagenet_WNID
     }
 }
 
@@ -151,6 +158,12 @@ def get_transform_from_name(dataset_name, dataset, input_size):
     # , 'TinyImagenet200IncludeClasses'
     if dataset_name in ('TinyImagenet200', 'Imagenet1000', 'CUB2011'):
         default_input_size = 64 if 'TinyImagenet200' in dataset_name else 224
+        input_size = input_size or default_input_size
+        transform_train = dataset.transform_train(input_size)
+        transform_test = dataset.transform_val(input_size)
+
+    if dataset_name in ('MiniImagenet'):
+        default_input_size = 84
         input_size = input_size or default_input_size
         transform_train = dataset.transform_train(input_size)
         transform_test = dataset.transform_val(input_size)

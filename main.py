@@ -91,10 +91,14 @@ dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
     keys=data.custom.keys, globals=globals())
 
-trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
-testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
+if args.dataset == 'MiniImagenet':
+    trainset = dataset(**dataset_kwargs, root='../mini-imagenet-tools/processed_images', train=True, download=True, transform=transform_train)
+    testset = dataset(**dataset_kwargs, root='../mini-imagenet-tools/processed_images', train=False, download=True, transform=transform_test)
+else:
+    trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
+    testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
 
-assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
+#assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
 
 trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
 testloader = torch.utils.data.DataLoader(testset, batch_size=min(100, args.batch_size), shuffle=False, num_workers=args.n_workers)
