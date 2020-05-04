@@ -35,7 +35,7 @@ DATASET_TO_FOLDER_NAME = {
     'MiniPlaces': 'miniplaces',
     'AnimalsWithAttributes2': 'Animals_with_Attributes2',
     'CUB2011': 'CUB_200_2011',
-    'MiniImagenet': '../mini-imagenet-tools/processed_images'
+    'MiniImagenet': 'processed_images'
 }
 
 # main script constants
@@ -56,7 +56,7 @@ DEFAULT_AWA2_WNID = './data/Animals_with_Attributes2/wnids.txt'
 DEFAULT_CUB_TREE = '/data/CUB_200_2011/graph-default.json'
 DEFAULT_CUB_WNID = './data/CUB_200_2011/wnids.txt'
 DEFAULT_MiniImagenet_TREE = '../mini-imagenet-tools/processed_images/graph-default.json'
-DEFAULT_MiniImagenet_WNID = '../mini-imagenet-tools/processed_images/wnids.txt'
+DEFAULT_MiniImagenet_WNID = '../mini-imagenet-tools/processed_images/wnids_train.txt'
 
 
 DATASET_TO_PATHS = {

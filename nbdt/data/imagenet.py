@@ -5,6 +5,7 @@ from torch.utils.data import Dataset
 import zipfile
 import urllib.request
 import shutil
+import torch
 
 
 
@@ -173,23 +174,36 @@ class MiniImagenet(Dataset):
     dataset = None
 
     def __init__(self, root='../mini-imagenet-tools/processed_images',
-            *args, train=True, download=False, **kwargs):
+            *args, train=True, download=False, zeroshot=False, **kwargs):
         super().__init__()
 
         dataset = _MiniImagenetTrain if train else _MiniImagenetVal
         self.root = root
         self.dataset = dataset(root, *args, **kwargs)
+        self.classes = self.dataset.classes
+        if not zeroshot:
+            train_len = int(.8 * len(self.dataset))
+            trainset, testset = torch.utils.data.random_split(self.dataset, [train_len, len(self.dataset)-train_len])
+            if train:
+                self.dataset = trainset
+            else:
+                self.dataset = testset
         # self.classes = self.dataset.classes
-        self.classes = []
-        classes_path = root.replace('train','').replace('val','') + '/classes.txt'
+        if zeroshot:
+            self.classes = self.get_classes()
+        self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
+        self.train = train
+        self.zeroshot = zeroshot
+
+    def get_classes(self):
+        classes = []
+        classes_path = self.root.replace('train', '').replace('val', '') + '/classes.txt'
         print(classes_path)
         with open(classes_path, 'r') as f:
             for i, line in enumerate(f):
                 cls = line.strip().split('\t')
-                self.classes+=cls
-        print(self.classes)
-        self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
-        self.train = train
+                classes += cls
+        return classes
 
     @staticmethod
     def transform_train(input_size=84):
@@ -210,7 +224,7 @@ class MiniImagenet(Dataset):
         ])
 
     def __getitem__(self, i):
-        if not self.train:
+        if self.zeroshot:
             return self.dataset[i][0], self.dataset[i][1]+64
         return self.dataset[i]
 
@@ -219,11 +233,17 @@ class MiniImagenet(Dataset):
 
 class _MiniImagenetTrain(datasets.ImageFolder):
 
-    def __init__(self, root='../mini-imagenet-tools/processed_images', *args, **kwargs):
-        super().__init__(os.path.join(root, 'train'), *args, **kwargs)
+    def __init__(self, root='../mini-imagenet-tools/processed_images', zeroshot=False, *args, **kwargs):
+        if zeroshot:
+            super().__init__(os.path.join(root, 'test'), *args, **kwargs)
+        else:
+            super().__init__(os.path.join(root, 'train'), *args, **kwargs)
 
 
 class _MiniImagenetVal(datasets.ImageFolder):
 
-    def __init__(self, root='../mini-imagenet-tools/processed_images', *args, **kwargs):
-        super().__init__(os.path.join(root, 'test'), *args, **kwargs)
+    def __init__(self, root='../mini-imagenet-tools/processed_images', zeroshot=False, *args, **kwargs):
+        if zeroshot:
+            super().__init__(os.path.join(root, 'test'), *args, **kwargs)
+        else:
+            super().__init__(os.path.join(root, 'train'), *args, **kwargs)

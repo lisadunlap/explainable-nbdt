@@ -187,10 +187,10 @@ class SoftTreeSupLoss(HardTreeSupLoss):
                 old_indices.extend(old)
                 new_indices.extend([index_child] * len(old))
 
-            # assert len(set(old_indices)) == len(old_indices), (
-            #     'All old indices must be unique in order for this operation '
-            #     'to be correct.'
-            # )
+            assert len(set(old_indices)) == len(old_indices), (
+                'All old indices must be unique in order for this operation '
+                'to be correct.'
+            )
             class_probs[:,old_indices] *= output[:,new_indices]
         return class_probs
 
