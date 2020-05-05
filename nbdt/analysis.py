@@ -27,7 +27,7 @@ import cv2
 
 __all__ = names = (
     'Noop', 'ConfusionMatrix', 'HardEmbeddedDecisionRules', 'SoftEmbeddedDecisionRules',
-    'SingleInference', 'HardFullTreePrior', 'HardTrackNodes', 'SoftFullTreePrior', 'SoftFullTreeOODPrior',
+    'SingleInference', 'HardFullTreePrior', 'HardTrackNodes', 'SoftFullTreePrior', 'SoftTrackDepth', 'SoftFullTreeOODPrior',
     'SingleRISE', 'SingleGradCAM')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
         'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path', 'ignore_labels',
@@ -574,9 +574,14 @@ class SoftTrackDepth(SoftFullTreePrior):
         self.depth_counts = {cls: {"depth": 0, "total": 0} for cls in self.classes}
         for cls in self.classes:
             cls_counts = self.node_counts[cls] # {node.wnid:0 for node in self.nodes}
-            cls_node = self.wnid_to_node[self.class_to_wnid[cls]]
-            true_path_wnids = get_path_to_node(self.G, cls_node) 
-
+            #print("===>",self.class_to_wnid[cls], self.wnid_to_node)
+            cls_wnid = self.class_to_wnid[cls]
+            #print("===> cls wnid:", cls_wnid)
+            #print("==> self.G.nodes:", self.G.nodes)
+            #print("===> nodes with datA:", self.G.nodes(data=True))
+            #cls_node = self.G[list(self.G.nodes).index(cls_wnid)] #[x for x in get_leaves(self.G) if x.wnid == cls_wnid][0]
+            cls_node = self.G.nodes[self.class_to_wnid[cls]]
+            true_path_wnids = get_path_to_node(self.G, self.class_to_wnid[cls]) #cls_node)
             cls_depth_count, cls_total_count = 0, 0
             for node in true_path_wnids:
                 cls_depth_count += cls_counts.get(node, 0)
@@ -592,7 +597,7 @@ class SoftTrackDepth(SoftFullTreePrior):
         self.calculate_depth_metrics()
         print("===> Depth metrics:")
         for cls, depth_dict in self.depth_counts.items():
-            print(f"{cls}: {depth_dict["ratio"]} ({depth_dict["depth"]} / {depth_dict["total"]})")
+            print(f"{cls}: {depth_dict['ratio']} ({depth_dict['depth']} / {depth_dict['total']})")
         total_depth_counts = sum(d["depth"] for d in self.depth_counts.values())
         total_counts = sum(d["total"] for d in self.depth_counts.values())
         print(f"Total: {total_depth_counts / total_counts} ({total_depth_counts} / {total_counts}")
