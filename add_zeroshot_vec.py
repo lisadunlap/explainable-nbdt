@@ -216,8 +216,7 @@ with torch.no_grad():
         else:
             fc_weights[i] -= np.mean(fc_weights[i])
             fc_weights[i] /= LA.norm(fc_weights[i])
-        # else:
-        #     assert all(fc_weights[i] == get_word_embedding(cls, trainset, args.dataset))
+
     setattr(net.module, key, nn.Linear(fc_weights.shape[1], len(trainset.classes)))
     setattr(getattr(net.module, key), "weight", nn.Parameter(torch.from_numpy(fc_weights)))
 

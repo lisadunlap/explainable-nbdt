@@ -30,10 +30,10 @@ def main():
     parser = get_parser()
 
     args = parser.parse_args()
+    wnids = get_wnids_from_dataset(args.dataset, path_wnids_ood=args.ood_path_wnids)
     if args.dataset == 'MiniImagenet':
-        wnids = get_wnids_from_dataset(args.dataset, root='../mini-imagenet-tools', path_wnids_ood=args.ood_path_wnids)
-    else:
-        wnids = get_wnids_from_dataset(args.dataset, path_wnids_ood=args.ood_path_wnids)
+        if args.drop_classes:
+            wnids=wnids[:64]
 
     if args.method == 'wordnet':
         G = build_minimal_wordnet_graph(wnids, args.single_path)

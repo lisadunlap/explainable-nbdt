@@ -176,16 +176,17 @@ class MiniImagenet(Dataset):
 
     dataset = None
 
-    def __init__(self, root='../mini-imagenet-tools/processed_images',
-            *args, train=True, zeroshot=False, **kwargs):
+    def __init__(self, root='./data',
+            drop_classes=False, *args, train=True, zeroshot=False, **kwargs):
         super().__init__()
 
-        self.root = root
+        self.root = os.path.join(root, 'mini-imagenet')
         if train:
             self.transform = self.transform_train()
         else:
             self.transform = self.transform_val()
         self.zeroshot = zeroshot
+        self.drop_classes = drop_classes
         self.classes = self.get_classes()
         self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
         self.train = train
@@ -194,10 +195,10 @@ class MiniImagenet(Dataset):
 
     def get_classes(self):
         classes = []
-        if not self.zeroshot:
-            classes_path = self.root.replace('train', '').replace('val', '') + '/classes_train.txt'
+        if not self.zeroshot and self.drop_classes:
+            classes_path = self.root + '/classes_train.txt'
         else:
-            classes_path = self.root.replace('train', '').replace('val', '') + '/classes.txt'
+            classes_path = self.root + '/classes.txt'
         with open(classes_path, 'r') as f:
             for i, line in enumerate(f):
                 cls = line.strip().split('\t')
@@ -208,16 +209,16 @@ class MiniImagenet(Dataset):
         self.paths = []
         self.path_to_class = {}
         if self.zeroshot:
-            classes_path = self.root.replace('train', '').replace('val', '') + '/zeroshot_paths.txt'
+            classes_path = self.root + '/zeroshot_paths.txt'
         elif self.train:
-            classes_path = self.root.replace('train', '').replace('val', '')+'/train_paths.txt'
+            classes_path = self.root +'/train_paths.txt'
         else:
-            classes_path = self.root.replace('train', '').replace('val', '') + '/test_paths.txt'
+            classes_path = self.root+ '/test_paths.txt'
         with open(classes_path) as f:
             for line in f.readlines():
                 path = line.strip()
-                self.paths.append(path)
-                self.path_to_class[path] = self.classes.index(path.split('/')[-2])
+                self.paths.append(os.path.join(self.root, path))
+                self.path_to_class[os.path.join(self.root, path)] = self.classes.index(path.split('/')[-2])
 
     @staticmethod
     def transform_train(input_size=84):

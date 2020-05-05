@@ -59,6 +59,7 @@ def get_parser():
                         help='labels to ignore when clustering, will be added at the end')
     parser.add_argument("--include-classes", nargs='*', type=str, help='classes to include')
     parser.add_argument('--ood-path-wnids', type=str, help='path to wnids.txt for ood-dataset')
+    parser.add_argument('--drop-classes', action='store_true')
     return parser
 
 
@@ -627,7 +628,7 @@ def balance_tree(G):
                 leaves = [n for n in G.neighbors(node) if 'n' in n]
             except:
                 return None, None
-            if len(leaves) > 1 and len(parents) > 0:
+            if len(leaves) > 1 and len(parents) == 1:
                 return node, leaves
         return None, None
 
@@ -639,6 +640,40 @@ def balance_tree(G):
             G.add_edge(new_parent.wnid, leaf)
             G.remove_edge(node, leaf)
         G.add_edge(node, new_parent.wnid)
+        Colors.green('==> combined children {} to node {}'.format(leaves, node))
         node, leaves = check_balance(G)
-        Colors.green('==> combined children {} to node {}'.format(leaves, new_parent.wnid))
-    return G
+    return prune_single_successor_nodes(G)
+
+def prettify_tree(G):
+    """This condenses trees where many splits have one child
+    that is a leaf and the other is a parent"""
+    def find_outliers(G):
+        for node in G.nodes():
+            try:
+                parents = [n for n in G.neighbors(node) if 'f' in n]
+                leaves = [n for n in G.neighbors(node) if 'n' in n]
+            except:
+                return None, None
+            if len(leaves) ==1 and len(parents) ==1:
+                # if not only this level is imbalanced but the next level as well
+                parents2 = [n for n in G.neighbors(parents[0]) if 'f' in n]
+                leaves2 = [n for n in G.neighbors(parents[0]) if 'n' in n]
+                if len(leaves2) == 1 and len(parents2) == 1:
+                    return node, leaves[0], parents[0]
+        return None, None, None
+
+    node, leaf, parent = find_outliers(G)
+    while node != None:
+        other_leaf = list(G.neighbors(parent))[0]
+        new_parent = FakeSynset.create_from_offset(len(G.nodes))
+        G.add_node(new_parent.wnid)
+        G.add_edge(new_parent.wnid, leaf)
+        G.add_edge(new_parent.wnid, other_leaf)
+        G.remove_edge(parent, other_leaf)
+        G.remove_edge(node, leaf)
+        G.add_edge(parent, new_parent.wnid)
+        Colors.green('==> combined children {} to node {}'.format(leaf, node))
+
+        node, leaf, parent = find_outliers(G)
+    G = prune_single_successor_nodes(G)
+    return balance_tree(G)

@@ -92,10 +92,12 @@ populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
     keys=data.custom.keys, globals=globals())
 
 if args.dataset == 'MiniImagenet':
-    trainset = dataset(**dataset_kwargs, root='../mini-imagenet-tools/processed_images',
-                       zeroshot=args.zeroshot_dataset, train=True, download=True, transform=transform_train)
-    testset = dataset(**dataset_kwargs, root='../mini-imagenet-tools/processed_images',
-                      zeroshot=args.zeroshot_dataset, train=False, download=True, transform=transform_test)
+    trainset = dataset(**dataset_kwargs, root='./data',
+                       zeroshot=args.zeroshot_dataset, train=True, download=True,
+                       drop_classes=args.drop_classes, transform=transform_train)
+    testset = dataset(**dataset_kwargs, root='./data',
+                      zeroshot=args.zeroshot_dataset, train=False, download=True,
+                      drop_classes=args.drop_classes, transform=transform_test)
 else:
     trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
     testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
@@ -222,11 +224,6 @@ def train(epoch, analyzer):
         outputs = net(inputs)
         loss = criterion(outputs, targets)
         loss.backward()
-        # Freeze rows of the last FC layer that correspond with the ZS classes
-        # TODO: optimize this with backward hook
-        # if args.exclude_classes:
-        #     for cls in args.exclude_classes:
-        #         net.module.linear.weight.grad[trainset.classes.index(cls)] = 0
         optimizer.step()
 
         train_loss += loss.item()
