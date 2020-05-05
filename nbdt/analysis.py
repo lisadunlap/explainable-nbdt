@@ -573,22 +573,18 @@ class SoftTrackDepth(SoftFullTreePrior):
     def calculate_depth_metrics(self):
         self.depth_counts = {cls: {"depth": 0, "total": 0} for cls in self.classes}
         for cls in self.classes:
-            cls_counts = self.node_counts[cls] # {node.wnid:0 for node in self.nodes}
-            #print("===>",self.class_to_wnid[cls], self.wnid_to_node)
+            cls_counts = self.node_counts[cls]
             cls_wnid = self.class_to_wnid[cls]
-            #print("===> cls wnid:", cls_wnid)
-            #print("==> self.G.nodes:", self.G.nodes)
-            #print("===> nodes with datA:", self.G.nodes(data=True))
-            #cls_node = self.G[list(self.G.nodes).index(cls_wnid)] #[x for x in get_leaves(self.G) if x.wnid == cls_wnid][0]
             cls_node = self.G.nodes[self.class_to_wnid[cls]]
-            true_path_wnids = get_path_to_node(self.G, self.class_to_wnid[cls]) #cls_node)
+            true_path_wnids = get_path_to_node(self.G, self.class_to_wnid[cls])
             cls_depth_count, cls_total_count = 0, 0
+
             for node in true_path_wnids:
                 cls_depth_count += cls_counts.get(node, 0)
                 cls_total_count += self.class_counts[cls]
             self.depth_counts[cls] = {
-                "depth": cls_depth_count, 
-                "total": cls_total_count, 
+                "depth": cls_depth_count,
+                "total": cls_total_count,
                 "ratio": cls_depth_count / cls_total_count,
             }
         return self.depth_counts
@@ -600,27 +596,7 @@ class SoftTrackDepth(SoftFullTreePrior):
             print(f"{cls}: {depth_dict['ratio']} ({depth_dict['depth']} / {depth_dict['total']})")
         total_depth_counts = sum(d["depth"] for d in self.depth_counts.values())
         total_counts = sum(d["total"] for d in self.depth_counts.values())
-        print(f"Total: {total_depth_counts / total_counts} ({total_depth_counts} / {total_counts}")
-
-    # def write_to_csv(self, path):
-    #     columns = {node:[] for node in get_leaves(self.G)}
-    #     for cls in self.classes:
-    #         for node in get_leaves(self.G):
-    #             if node in self.leaf_counts[cls]:
-    #                 columns[node].append(self.leaf_counts[cls][node])
-    #             else:
-    #                 columns[node].append(0)
-    #     new_columns = {}
-    #     for node in get_leaves(self.G):
-    #         new_columns["%s %s" % (synset_to_name(wnid_to_synset(node)), node)] = columns[node]
-    #     try:
-    #         int(self.classes[1:])
-    #         index = [self.wnid_to_name[cls] for cls in self.classes]
-    #     except:
-    #         index = [cls for cls in self.classes]
-    #     df = pd.DataFrame(data=new_columns, index=index)
-    #     df.to_csv(path)
-    #     print("CSV saved to %s" % path)
+        print(f"Total: {total_depth_counts / total_counts} ({total_depth_counts} / {total_counts})")
 
 class SoftFullTreeOODPrior(SoftFullTreePrior):
 
