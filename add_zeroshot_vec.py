@@ -80,9 +80,9 @@ populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
                 keys=data.custom.keys, globals=globals())
 
 if args.dataset == 'MiniImagenet':
-    trainset = dataset(**dataset_kwargs, root='../mini-imagenet-tools/processed_images',
+    trainset = dataset(**dataset_kwargs, root='./data',
                        zeroshot=args.zeroshot_dataset, train=True, download=True, transform=transform_train)
-    testset = dataset(**dataset_kwargs, root='../mini-imagenet-tools/processed_images',
+    testset = dataset(**dataset_kwargs, root='./data',
                       zeroshot=args.zeroshot_dataset, train=False, download=True, transform=transform_test)
 else:
     trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
