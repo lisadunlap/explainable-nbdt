@@ -585,7 +585,7 @@ class SoftTrackDepth(SoftFullTreePrior):
             self.depth_counts[cls] = {
                 "depth": cls_depth_count,
                 "total": cls_total_count,
-                "ratio": cls_depth_count / cls_total_count,
+                "ratio": cls_depth_count / cls_total_count if cls_total_count != 0 else 0,
             }
         return self.depth_counts
 
