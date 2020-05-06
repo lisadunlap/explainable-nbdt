@@ -252,6 +252,11 @@ To add custom paths:
 python modify_tree.py --json-path=./data/CIFAR10/graph-induced-wrn28_10_cifar10.json --dataset CIFAR10 --parents f00000010 --children n02958343
 ```
 
+To get rid of those weird one off leaves (helps balance the tree)
+```
+python modify_tree.py --json-path=./data/CIFAR10/graph-induced-wrn28_10_cifar10.json --dataset CIFAR10 --mode prettify
+```
+
 ## Weights and Biases Logging
 
 To log results on weights and biases (which is strongly recommended), you must first create an account and run your command (either training, inference, or analysis), with the `--wandb` flag. The first time you run it you will be prompted to enter your api key.
@@ -325,3 +330,11 @@ n02121620
 n04490091
 ```
 The format is exactly the same as the `wnids.txt` for the original dataset, except you only keep wnids for the remaining OOD classes. No need to change the `wnids.txt` for the original dataset.
+
+## Comparing ZS embeddings to Seen embeddings
+This will compare the image embeddings of the seen classes to the image embeddings of the ZS classes
+
+Example with AwA2(same args as `add_zeroshot_vec.py` but you dont need the `--zeroshot-dataset` flag):
+```
+python get_image_centers.py --model resnet50 --pretrained --dataset AnimalsWithAttributes2 --path-resume ./checkpoint/ckpt-awa2-resnet50-freeze.pth --resume --new-labels 5 13 14 17 23 24 33 38 41 47 --replace
+```
