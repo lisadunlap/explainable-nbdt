@@ -156,7 +156,7 @@ if args.resume:
 #
 # current_weights = {testset.classes[cls]:[] for i, cls in enumerate(list(range(64)))}
 
-zs_labels = (5, 13, 14, 17, 23, 24, 33, 38, 41, 47)
+zs_labels = (args.new_labels)
 
 current_weights = {trainset.classes[cls]:[] for i, cls in enumerate(list(set(range(50)).difference(zs_labels)))}
 

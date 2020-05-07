@@ -10,8 +10,10 @@ def main():
 
     parser = get_parser()
     args = parser.parse_args()
-
-    wnids = get_wnids_from_dataset(args.dataset)
+    wnids = get_wnids_from_dataset(args.dataset, path_wnids_ood=args.ood_path_wnids)
+    if args.dataset == 'MiniImagenet':
+        if args.drop_classes:
+            wnids = wnids[:64]
     path = get_graph_path_from_args(args)
     if args.json_path:
         path = args.json_path
