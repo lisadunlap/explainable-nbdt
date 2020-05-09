@@ -156,8 +156,7 @@ if args.resume:
 #
 # current_weights = {testset.classes[cls]:[] for i, cls in enumerate(list(range(64)))}
 
-zs_labels = (args.new_labels)
-
+zs_labels = (args.new_labels) if args.new_labels else set(range(64, 84))
 current_weights = {trainset.classes[cls]:[] for i, cls in enumerate(list(set(range(50)).difference(zs_labels)))}
 
 cls_to_vec = {testset.classes[cls]:[] for i, cls in enumerate(list(zs_labels))}
@@ -195,8 +194,10 @@ with torch.no_grad():
         current_weights[cls] /= LA.norm(current_weights[cls])
 
 def get_most_similar(c, cls_to_vec, weights):
-    #dist = {cls: cosine(cls_to_vec[c], weights[cls]) for cls in weights}
-    dist = {cls: LA.norm(cls_to_vec[c]-weights[cls]) for cls in weights}
+    dist = {cls: cosine(cls_to_vec[c], weights[cls]) for cls in weights}
+    dist_total = sum(dist.values())
+    dist = {cls: dist[cls] / dist_total for cls in dist}
+    #dist = {cls: LA.norm(cls_to_vec[c]-weights[cls]) for cls in weights}
     print(dist)
     return min(dist, key=dist.get)
 
@@ -223,13 +224,15 @@ with torch.no_grad():
 
     fc_weights = fc.weight.cpu().numpy()
 
+    cls_to_vec = {cls: cls_to_vec[cls] / sum(cls_to_vec[cls]) for cls in cls_to_vec}
+    current_weights = {cls: current_weights[cls] / sum(current_weights[cls]) for cls in current_weights}
     pairings = {c: None for c in cls_to_vec}
     for cls in cls_to_vec:
         pairings[cls] = get_most_similar(cls, cls_to_vec, current_weights)
         print(f"{cls}: {pairings[cls]}")
         # print(f"{wnid_to_synset(cls).name().split('.')[0]}: {wnid_to_synset(pairings[cls]).name().split('.')[0]}")
     print(pairings)
-
+    print({wnid_to_synset(cls).name().split('.')[0]: wnid_to_synset(pairings[cls]).name().split('.')[0] for cls in cls_to_vec})
 #
 #
 # new_classes = [testset.classes[i] for i in list(range(64, 84))]
