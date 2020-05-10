@@ -10,6 +10,7 @@ from pathlib import Path
 import torch
 import argparse
 import os
+from numpy import linalg as LA
 
 
 def get_parser():
@@ -332,6 +333,9 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
     wnids = [wnid for label, wnid in enumerate(wnids) if label not in ignore_labels]
     centers = centers_all[use_labels,:]
     n_classes = centers.size(0)
+    # for d in range(centers.shape[1]):
+    #     centers[:, d] -= np.mean(centers[:, d])
+    #     centers[:, d] /= LA.norm(centers[:, d])
 
     G = nx.DiGraph()
 
@@ -341,6 +345,11 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
         center_to_wnid[i] = wnid
         G.add_node(wnid)
         set_node_label(G, wnid_to_synset(wnid))
+
+    centers = centers.numpy()
+    for d in range(centers.shape[1]):
+        centers[:, d] -= np.mean(centers[:, d])
+        centers[:, d] /= LA.norm(centers[:, d])
 
     # add rest of tree
     clustering = AgglomerativeClustering(
@@ -608,6 +617,7 @@ def add_paths(G, parents, children):
     NUM_PATHS paths
     """
     for (parent, node) in zip(parents, children):
+        G.add_node(node)
         G.add_edge(parent, node)
         Colors.green('==> added path from {} to {}'.format(parent, node))
     return prune_single_successor_nodes(balance_tree(G))
