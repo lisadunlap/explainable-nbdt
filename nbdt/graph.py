@@ -7,6 +7,7 @@ from nbdt.utils import DATASETS, METHODS, DATASET_TO_FOLDER_NAME, Colors
 from networkx.readwrite.json_graph import node_link_data, node_link_graph
 from sklearn.cluster import AgglomerativeClustering
 from pathlib import Path
+from numpy import linalg as LA
 import torch
 import argparse
 import os
@@ -331,6 +332,14 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
     wnids = [wnid for label, wnid in enumerate(wnids) if label not in ignore_labels]
     centers = centers_all[use_labels,:]
     n_classes = centers.size(0)
+    attention_dict = {}  # node label : [sorted list of indices, by most similar]
+    vec_dict = {} # node label : feature vector 
+
+    # normalize centers
+    centers = centers.numpy()
+    for d in range(centers.shape[1]):
+        centers[:,d] -= np.mean(centers[:,d])
+        centers[:,d] /= LA.norm(centers[:,d])
 
     G = nx.DiGraph()
 
@@ -338,6 +347,7 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
     center_to_wnid = {}
     for i, wnid in enumerate(wnids):
         center_to_wnid[i] = wnid
+        vec_dict[wnid] = centers[i]
         G.add_node(wnid)
         set_node_label(G, wnid_to_synset(wnid))
 
@@ -355,15 +365,21 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
         G.add_node(parent.wnid)
         index_to_wnid[index] = parent.wnid
 
+        child_vectors = []
         for child in pair:
             if child < n_classes:
                 child_wnid = wnids[child]
             else:
                 child_wnid = index_to_wnid[child - n_classes]
+            child_vectors.append(vec_dict[child_wnid])
             G.add_edge(parent.wnid, child_wnid)
+        vec_dict[parent.wnid] = np.mean(child_vectors, axis=0)
+        vec_diff = np.max(child_vectors, axis=0) - np.min(child_vectors, axis=0)
+        attention_dict[parent.wnid] = {'attention_mask': np.argsort(vec_diff).tolist()}
+
+    nx.set_node_attributes(G, attention_dict)
 
     # add originally ignored labels
-    
     for label in ignore_labels:
         wnid_new = wnids_all[label]
         G.add_node(wnid_new)
