@@ -377,7 +377,9 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
         vec_diff = np.max(child_vectors, axis=0) - np.min(child_vectors, axis=0)
         attention_dict[parent.wnid] = {'attention_mask': np.argsort(vec_diff).tolist()}
 
+    vect_dict = {wnid: {'feature_vector': vec_dict[wnid]} for wnid in vec_dict}
     nx.set_node_attributes(G, attention_dict)
+    nx.set_node_attributes(G, vect_dict)
 
     # add originally ignored labels
     for label in ignore_labels:

@@ -6,6 +6,7 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 import torchsample
 import json
+import networkx as nx
 from collections import defaultdict
 from nbdt.utils import (
     DEFAULT_CIFAR10_TREE, DEFAULT_CIFAR10_WNIDS, DEFAULT_CIFAR100_TREE,
@@ -109,6 +110,13 @@ class Node:
 
         self._probabilities = None
         self._class_weights = None
+
+        att_masks = nx.get_node_attributes(self.G, 'attention_mask')
+        vecs = nx.get_node_attributes(self.G, 'feature_vector')
+        if self.wnid in att_masks:
+            self.attention_mask = att_masks[self.wnid]
+        if self.wnid in vecs:
+            self.feature_vector = vecs[self.wnid]
 
     def wnid_to_class_index(self, wnid):
         return self.wnids.index(wnid)

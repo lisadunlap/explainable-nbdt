@@ -14,11 +14,11 @@ import wandb
 
 import models
 from nbdt.utils import (
-    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors, word2vec_model,
-    get_transform_from_name, normalize_weights
+    progress_bar, generate_fname, DATASET_TO_PATHS, populate_kwargs, Colors,
+    get_transform_from_name,
 )
 
-datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.awa2.names + data.cub.names + data.miniplaces.names
+datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names
 
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR Training')
@@ -27,12 +27,10 @@ parser.add_argument('--batch-size', default=512, type=int,
 parser.add_argument('--epochs', '-e', default=200, type=int,
                     help='By default, lr schedule is scaled accordingly')
 parser.add_argument('--dataset', default='CIFAR10', choices=datasets)
-parser.add_argument('--model', default='ResNet10', choices=list(models.get_model_choices()))
+parser.add_argument('--model', default='ResNet18', choices=list(models.get_model_choices()))
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
-parser.add_argument('--ood-dataset', choices=datasets, help='dataset to use for out of distribution images')
-parser.add_argument('--ood-classes', nargs='*', type=str, help='classes to include for ood-dataset')
-parser.add_argument('--ood-path-wnids', type=str, help='path to wnids.txt for ood-dataset')
+
 # extra general options for main script
 parser.add_argument('--checkpoint-fname', default='',
                     help='Overrides checkpoint name generation')
@@ -42,10 +40,7 @@ parser.add_argument('--name', default='',
                     help='Name of experiment. Used for checkpoint filename')
 parser.add_argument('--pretrained', action='store_true',
                     help='Download pretrained model. Not all models support this.')
-parser.add_argument('--freeze-conv', action='store_true')
-parser.add_argument('--normalize', action='store_true')
 parser.add_argument('--eval', help='eval only', action='store_true')
-parser.add_argument('--n-workers', help='num workers', default=2, type=int)
 
 # options specific to this project and its dataloaders
 parser.add_argument('--loss', choices=loss.names, default='CrossEntropyLoss')
@@ -55,13 +50,6 @@ parser.add_argument('--input-size', type=int,
                     'input-size + 32.')
 parser.add_argument('--experiment-name', type=str, help='name of experiment in wandb')
 parser.add_argument('--wandb', action='store_true', help='log using wandb')
-parser.add_argument('--word2vec', action='store_true')
-parser.add_argument("--track_nodes", nargs="*", type=str, help="nodes to keep track of")
-parser.add_argument("--train-word2vec", action='store_true', help="fit model to pretrained weights")
-parser.add_argument('--freeze-classes',  nargs="*", type=str, help="classes whose FC weights should freeze")
-parser.add_argument('--weight-decay', type=float, default=5e-4)
-parser.add_argument('--feature-attention', action='store_true', help='keep track of feature vectors')
-parser.add_argument('--top-k', type=float, default=0.5, help='keep top k elements in mask, if using feature attention')
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -75,7 +63,7 @@ experiment_name = args.experiment_name if args.experiment_name \
     else '{}-{}-{}-{}'.format(args.model, args.dataset, args.loss, args.analysis)
 
 if args.wandb:
-    wandb.init(project=experiment_name, name='main', entity='lisadunlap')
+    wandb.init(project=experiment_name, name='main')
     wandb.config.update({
         k: v for k, v in vars(args).items() if (isinstance(v, str) or isinstance(v, int) or isinstance(v, float))
     })
@@ -93,19 +81,13 @@ dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
     keys=data.custom.keys, globals=globals())
 
-if args.dataset == 'MiniImagenet':
-    trainset = dataset(**dataset_kwargs, root='../mini-imagenet-tools/processed_images',
-                       zeroshot=args.zeroshot_dataset, train=True, download=True, transform=transform_train)
-    testset = dataset(**dataset_kwargs, root='../mini-imagenet-tools/processed_images',
-                      zeroshot=args.zeroshot_dataset, train=False, download=True, transform=transform_test)
-else:
-    trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
-    testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
+trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
+testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
 
-#assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
+assert trainset.classes == testset.classes, (trainset.classes, testset.classes)
 
-trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
-testloader = torch.utils.data.DataLoader(testset, batch_size=min(100, args.batch_size), shuffle=False, num_workers=args.n_workers)
+trainloader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, num_workers=0)
+testloader = torch.utils.data.DataLoader(testset, batch_size=100, shuffle=False, num_workers=0)
 
 Colors.cyan(f'Training with dataset {args.dataset} and {len(trainset.classes)} classes')
 
@@ -117,13 +99,7 @@ model_kwargs = {'num_classes': len(trainset.classes) }
 if args.pretrained:
     try:
         print('==> Loading pretrained model..')
-        # net = model(pretrained=True, **model_kwargs)
-        net = model(pretrained=True)
-        # TODO: this is hardcoded
-        if int(args.model[6:]) <= 34:
-            net.fc = nn.Linear(512, model_kwargs['num_classes'])
-        else:
-            net.fc = nn.Linear(512*4, model_kwargs['num_classes'])
+        net = model(pretrained=True, **model_kwargs)
     except Exception as e:
         Colors.red(f'Fatal error: {e}')
         exit()
@@ -148,7 +124,6 @@ if args.resume:
 
         if 'net' in checkpoint:
             net.load_state_dict(checkpoint['net'])
-            
             best_acc = checkpoint['acc']
             start_epoch = checkpoint['epoch']
             Colors.cyan(f'==> Checkpoint found for epoch {start_epoch} with accuracy '
@@ -157,75 +132,27 @@ if args.resume:
             net.load_state_dict(checkpoint)
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
-elif args.path_resume:
-    # Load checkpoint.
-    print('==> Resuming from checkpoint..')
-    assert os.path.isdir('checkpoint'), 'Error: no checkpoint directory found!'
-    if not os.path.exists(resume_path):
-        print('==> No checkpoint found. Skipping...')
-    else:
-        checkpoint = torch.load(resume_path)
-        net.load_state_dict(checkpoint['net'])
-        Colors.cyan(f'==> Checkpoint found at {resume_path}')
-
-if args.normalize:
-    net = normalize_weights(net, pretrained=args.pretrained)
-
-if args.word2vec:
-    net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset,
-                         pretrained=args.pretrained)
-
-
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
     keys=loss.keys, globals=globals())
 criterion = class_criterion(**loss_kwargs)
 
-optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
+optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
 def adjust_learning_rate(epoch, lr):
     if epoch <= 150 / 350. * args.epochs:  # 32k iterations
       return lr
     elif epoch <= 250 / 350. * args.epochs:  # 48k iterations
       return lr/10
-    elif epoch <= 350 / 500. * args.epochs:  # 48k iterations
-        return lr / 100
     else:
-      return lr/1000
-
-def exp_lr_scheduler(epoch, init_lr=0.0001, lr_decay_epoch=30, weight=0.1):
-    lr = init_lr * (weight ** (epoch // lr_decay_epoch))
-    return lr
-
-hooked_inputs = None
-def testhook(self, input, output):
-    global hooked_inputs
-    hooked_inputs = input[0]
-
-keys = ['fc', 'linear']
-for key in keys:
-    fc = getattr(net.module, key, None)
-    if fc is not None:
-        break
-
-if args.feature_attention:
-    fc.register_forward_hook(testhook)
-
-if args.freeze_conv:
-    for param in net.parameters():
-        param.requires_grad = False
-    fc.requires_grad = True
+      return lr/100
 
 # Training
 def train(epoch, analyzer):
     analyzer.start_train(epoch)
-    if args.dataset in ("MiniPlaces",):
-        lr = exp_lr_scheduler(epoch)
-        optimizer = optim.RMSprop(net.parameters(), lr=lr)
-    else:
-        lr = adjust_learning_rate(epoch, args.lr)
-        optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+    lr = adjust_learning_rate(epoch, args.lr)
+    optimizer = optim.SGD(net.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
 
     print('\nEpoch: %d' % epoch)
     net.train()
@@ -233,21 +160,11 @@ def train(epoch, analyzer):
     correct = 0
     total = 0
     for batch_idx, (inputs, targets) in enumerate(trainloader):
-        if args.dataset in ("AnimalsWithAttributes2"):
-            inputs, predicates = inputs
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
         outputs = net(inputs)
-        if args.feature_attention:
-            loss = criterion((fc, hooked_inputs), targets)
-        else:
-            loss = criterion(outputs, targets)
+        loss = criterion(outputs, targets)
         loss.backward()
-        # Freeze rows of the last FC layer that correspond with the ZS classes
-        # TODO: optimize this with backward hook
-        # if args.exclude_classes:
-        #     for cls in args.exclude_classes:
-        #         net.module.linear.weight.grad[trainset.classes.index(cls)] = 0
         optimizer.step()
 
         train_loss += loss.item()
@@ -263,11 +180,9 @@ def train(epoch, analyzer):
 
     analyzer.end_train(epoch)
 
-def test(epoch, analyzer, checkpoint=True, ood_loader=None):
+def test(epoch, analyzer, checkpoint=True):
     analyzer.start_test(epoch)
-    global testloader
-    if ood_loader:
-        testloader = ood_loader
+
     global best_acc
     net.eval()
     test_loss = 0
@@ -275,8 +190,6 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     total = 0
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(testloader):
-            if args.dataset in ("AnimalsWithAttributes2"):
-                inputs, predicates = inputs
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
             loss = criterion(outputs, targets)
@@ -289,9 +202,6 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
             if device == 'cuda':
                 predicted = predicted.cpu()
                 targets = targets.cpu()
-
-            if args.feature_attention:
-                outputs = (fc, hooked_inputs)
 
             stat = analyzer.update_batch(outputs, predicted, targets)
             extra = f'| {stat}' if stat else ''
@@ -327,19 +237,9 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
 
     analyzer.end_test(epoch)
 
-if args.ood_dataset:
-    ood_dataset = getattr(data, args.ood_dataset)
-    ood_dataset_kwargs = {}
-    populate_kwargs(args, ood_dataset_kwargs, ood_dataset, name=f'Dataset {args.ood_dataset}',
-        keys=data.custom.keys, globals=globals())
-    ood_dataset_kwargs['include_classes'] = args.ood_classes # manual override
-    ood_set = dataset(**ood_dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
-    ood_loader = torch.utils.data.DataLoader(ood_set, batch_size=args.batch_size, shuffle=True, num_workers=args.n_workers)
 
 analyzer_kwargs = {}
 class_analysis = getattr(analysis, args.analysis or 'Noop')
-if args.ood_dataset:
-    args.oodset = ood_set
 populate_kwargs(args, analyzer_kwargs, class_analysis,
     name=f'Analyzer {args.analysis}', keys=analysis.keys, globals=globals())
 analyzer = class_analysis(**analyzer_kwargs, experiment_name=experiment_name, use_wandb=args.wandb)
@@ -349,12 +249,9 @@ if args.eval:
     if not args.resume and not args.pretrained:
         Colors.red(' * Warning: Model is not loaded from checkpoint. '
         'Use --resume or --pretrained (if supported)')
-    net.eval()
+
     analyzer.start_epoch(0)
-    if args.ood_dataset:
-        test(0, analyzer, checkpoint=False, ood_loader=ood_loader)
-    else:
-        test(0, analyzer, checkpoint=False)
+    test(0, analyzer, checkpoint=False)
     exit()
 
 for epoch in range(start_epoch, args.epochs):

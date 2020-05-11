@@ -6,11 +6,11 @@ from nbdt.data.custom import Node
 import numpy as np
 from nbdt.utils import Colors
 
-__all__ = names = ('HardTreeSupLoss', 'SoftTreeSupLoss', 'CrossEntropyLoss', 'HardTreeSupLossMultiPath')
+__all__ = names = ('HardTreeSupLoss', 'SoftTreeSupLoss', 'CrossEntropyLoss', 'HardTreeSupLossMultiPath', 'SoftTreeSupMaskLoss')
 keys = (
     'path_graph', 'path_wnids', 'max_leaves_supervised',
     'min_leaves_supervised', 'weighted_average', 'tree_supervision_weight',
-    'classes'
+    'classes', 'top_k'
 )
 
 
@@ -49,11 +49,12 @@ class TreeSupLoss(nn.Module):
     accepts_tree_supervision_weight = True
     accepts_weighted_average = True
     accepts_classes = lambda trainset, **kwargs: trainset.classes
+    accepts_top_k = True
 
     def __init__(self, path_graph, path_wnids, classes,
             max_leaves_supervised=-1, min_leaves_supervised=-1,
             tree_supervision_weight=1., weighted_average=False,
-            criterion=nn.CrossEntropyLoss()):
+            criterion=nn.CrossEntropyLoss(), top_k=0.5):
         super().__init__()
 
         self.num_classes = len(classes)
@@ -64,6 +65,7 @@ class TreeSupLoss(nn.Module):
         self.weighted_average = weighted_average
         self.criterion = criterion
         self.tree_criterion = nn.BCEWithLogitsLoss()
+        self.top_k = top_k
 
 
 class HardTreeSupLoss(TreeSupLoss):
@@ -193,6 +195,80 @@ class SoftTreeSupLoss(HardTreeSupLoss):
             )
             class_probs[:,old_indices] *= output[:,new_indices]
         return class_probs
+
+
+class SoftTreeSupMaskLoss(SoftTreeSupLoss):
+
+    def forward(self, outputs, targets):
+        fc, outputs = outputs
+        print(fc.requires_grad)
+        #loss = self.criterion(torch.mm(outputs, torch.transpose(fc, 0, 1)), targets)
+        loss = self.criterion(fc(outputs), targets)
+        bayesian_outputs = SoftTreeSupMaskLoss.inference(
+            self.nodes, outputs, fc, self.num_classes, self.weighted_average, self.top_k)
+        loss += self.criterion(bayesian_outputs, targets) * self.tree_supervision_weight
+        return loss
+
+    @classmethod
+    def inference(cls, nodes, outputs, fc, num_classes, weighted_average=False, top_k=0.5):
+        """
+        In theory, the loop over children below could be replaced with just a
+        few lines:
+
+            for index_child in range(len(node.children)):
+                old_indexes = node.new_to_old_classes[index_child]
+                class_probs[:,old_indexes] *= output[:,index_child][:,None]
+
+        However, we collect all indices first, so that only one tensor operation
+        is run.
+        """
+        class_probs = torch.ones((outputs.size(0), num_classes)).to(outputs.device)
+        for node in nodes:
+            output = cls.get_output_sub(outputs, node, weighted_average, top_k, fc)
+            output = F.softmax(output)
+
+            old_indices, new_indices = [], []
+            for index_child in range(len(node.children)):
+                old = node.new_to_old_classes[index_child]
+                old_indices.extend(old)
+                new_indices.extend([index_child] * len(old))
+
+            assert len(set(old_indices)) == len(old_indices), (
+                'All old indices must be unique in order for this operation '
+                'to be correct.'
+            )
+            class_probs[:,old_indices] *= output[:,new_indices]
+        return class_probs
+
+
+    @staticmethod
+    def get_output_sub(_outputs, node, weighted_average, top_k, fc):
+        # here, outputs is the feature vector instead of pre-softmax fc outputs
+        attention_mask = node.attention_mask
+        attention_zero_mask = np.array(attention_mask[int(top_k*len(attention_mask)):])
+
+        attention_zero_mask = np.repeat(attention_zero_mask[np.newaxis,:], _outputs.size(0), axis=0)
+        attention_zero_mask = torch.tensor(attention_zero_mask).long().to(_outputs.device)
+
+        _outputs.scatter_(1,attention_zero_mask,0.)
+        #_outputs = torch.mm(_outputs, torch.transpose(fc, 0, 1))
+        _outputs = fc(_outputs)
+
+        if weighted_average:
+            node.move_leaf_weights_to(_outputs.device)
+
+        weights = [
+            node.new_to_leaf_weights[new_label] if weighted_average else 1
+            for new_label in range(node.num_classes)
+        ]
+
+        cls_idxs = [node.new_to_old_classes[new_label] for new_label in range(node.num_classes)]
+
+        return torch.stack([
+            (_outputs * weight).T
+            [cls_idx].mean(dim=0)
+            for cls_idx, weight in zip(cls_idxs, weights)
+        ]).T
 
 class HardTreeSupLossMultiPath(HardTreeSupLoss):
 

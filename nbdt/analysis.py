@@ -5,7 +5,7 @@ from nbdt.utils import (
     DEFAULT_TINYIMAGENET200_WNIDS, DEFAULT_IMAGENET1000_TREE,
     DEFAULT_IMAGENET1000_WNIDS, set_np_printoptions
 )
-from nbdt.loss import HardTreeSupLoss, SoftTreeSupLoss
+from nbdt.loss import HardTreeSupLoss, SoftTreeSupLoss, SoftTreeSupMaskLoss
 from nbdt.data.custom import Node
 from generate_vis import generate_vis, build_tree
 from networkx.readwrite.json_graph import node_link_data, node_link_graph
@@ -31,7 +31,7 @@ __all__ = names = (
     'SingleRISE', 'SingleGradCAM')
 keys = ('path_graph', 'path_graph_analysis', 'path_wnids', 'weighted_average',
         'trainset', 'testset', 'json_save_path', 'experiment_name', 'csv_save_path', 'ignore_labels',
-        'oodset', 'ood_path_wnids')
+        'oodset', 'ood_path_wnids', 'feature_attention', 'top_k')
 
 def add_arguments(parser):
     parser.add_argument('--json-save-path', default=None, type=str,
@@ -306,12 +306,14 @@ class HardFullTreePrior(Noop):
     accepts_json_save_path = True
     accepts_weighted_average = True
     accepts_ignore_labels = True
+    accepts_feature_attention = True
+    accepts_top_k = True
 
     """Evaluates model on a decision tree prior. Evaluation is deterministic."""
     """Evaluates on entire tree, tracks all paths."""
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, ignore_labels=[],
                  json_save_path='./out/full_tree_analysis/', csv_save_path='./out/cifar100.csv',
-                 weighted_average=False, use_wandb=False, run_name="HardFullTreePrior"):
+                 weighted_average=False, use_wandb=False, run_name="HardFullTreePrior", feature_attention=False, top_k=0.5):
         super().__init__(trainset, testset, experiment_name, use_wandb, run_name=run_name)
         # weird, sometimes self.classes are wnids, and sometimes they are direct classes.
         # just gotta do a check. Its basically CIFAR vs wordnet
@@ -327,6 +329,7 @@ class HardFullTreePrior(Noop):
         self.weighted_average = weighted_average
         self.correct = 0
         self.total = 0
+        self.feature_attention = feature_attention
 
         self.wnid_to_name = {wnid: synset_to_name(wnid_to_synset(wnid)) for wnid in self.wnids}
         self.leaf_counts = {cls:{node:0 for node in get_leaves(self.G)} for cls in self.classes}
@@ -342,6 +345,7 @@ class HardFullTreePrior(Noop):
         self.class_to_wnid = {self.wnid_to_class[wnid]:wnid for wnid in self.wnids}
         self.class_accuracies = {c: 0 for c in self.classes}
         self.class_totals = {c: 0 for c in self.classes}
+        self.top_k = top_k
 
     def update_batch(self, outputs, predicted, targets):
         wnid_to_pred_selector = {}
@@ -463,9 +467,9 @@ class HardTrackNodes(HardFullTreePrior):
         Note: only works if dataloader for evaluation is NOT shuffled."""
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, track_nodes,
         json_save_path='./out/hard_track_nodes_analysis/', csv_save_path='./out/hard_track_nodes_analysis.csv', weighted_average=False,
-        use_wandb=False, run_name="HardTrackNodes"):
+        use_wandb=False, run_name="HardTrackNodes", feature_attention=False, top_k=0.5):
         super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, json_save_path,
-                         csv_save_path, weighted_average, use_wandb, run_name)
+                         csv_save_path, weighted_average, use_wandb, run_name, feature_attention, top_k)
         self.track_nodes = {wnid:[] for wnid in track_nodes}
 
     # return leaf node wnids corresponding to each output
@@ -519,17 +523,21 @@ class SoftFullTreePrior(HardFullTreePrior):
 
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, ignore_labels=[],
                  json_save_path='./out/full_tree_analysis/', csv_save_path='./out/cifar100.csv',
-                 weighted_average=False, use_wandb=False, run_name="SoftFullTreePrior"):
+                 weighted_average=False, use_wandb=False, run_name="SoftFullTreePrior", feature_attention=False, top_k=0.5):
         super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, ignore_labels,
-                 json_save_path, csv_save_path, weighted_average, use_wandb, run_name)
+                 json_save_path, csv_save_path, weighted_average, use_wandb, run_name, feature_attention, top_k)
         self.num_classes = len(trainset.classes)
         get_path = lambda wnid: nx.shortest_path(self.G, source=get_root(self.G), target=wnid)
         self.paths = {self.wnid_to_class[wnid]: get_path(wnid) for wnid in self.wnids}
 
     def update_batch(self, outputs, predicted, targets):
-        bayesian_outputs = SoftTreeSupLoss.inference(
-            self.nodes, outputs, self.num_classes, self.weighted_average)
-        n_samples = outputs.size(0)
+        if self.feature_attention:
+            bayesian_outputs = SoftTreeSupMaskLoss.inference(self.nodes, outputs, self.num_classes, self.weighted_average, self.top_k)
+            n_samples = outputs[1].size(0)
+        else:
+            bayesian_outputs = SoftTreeSupLoss.inference(
+                self.nodes, outputs, self.num_classes, self.weighted_average)
+            n_samples = outputs.size(0)
         predicted = bayesian_outputs.max(1)[1].to(targets.device)
         paths = self.traverse_tree(predicted.cpu().numpy(), n_samples, targets)
 
