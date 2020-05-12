@@ -196,6 +196,14 @@ class MiniImagenet(Dataset):
             self.df = pd.read_csv('./data/mini-imagenet/csv_files/test.csv')
         else:
             self.df = pd.read_csv('./data/mini-imagenet/csv_files/train.csv')
+            if self.train:
+                for l in self.df.label.unique():
+                    self.df[self.df['label'] == l] = self.df[self.df['label'] == l][:450]
+                    self.df = self.df.dropna()
+            else:
+                for l in self.df.label.unique():
+                    self.df[self.df['label'] == l] = self.df[self.df['label'] == l][450:]
+                    self.df = self.df.dropna()
 
     def get_classes(self):
         classes = []
