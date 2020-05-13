@@ -256,6 +256,9 @@ def train(epoch, analyzer):
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
+        if args.feature_attention:
+            outputs = (fc, hooked_inputs)
+
         stat = analyzer.update_batch(outputs, predicted, targets)
         extra = f'| {stat}' if stat else ''
 
@@ -318,7 +321,7 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     print("Accuracy: {}, {}/{}".format(acc, correct, total))
     if args.analysis_accuracy:
         acc = stat
-        
+
     if acc > best_acc and checkpoint:
         state = {
             'net': net.state_dict(),
