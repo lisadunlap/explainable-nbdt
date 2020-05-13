@@ -50,6 +50,7 @@ parser.add_argument('--n-workers', help='num workers', default=2, type=int)
 # options specific to this project and its dataloaders
 parser.add_argument('--loss', choices=loss.names, default='CrossEntropyLoss')
 parser.add_argument('--analysis', choices=analysis.names, help='Run analysis after each epoch')
+parser.add_argument('--analysis-accuracy', action='store_true', help='Use analysis score to decide whether to save')
 parser.add_argument('--input-size', type=int,
                     help='Set transform train and val. Samples are resized to '
                     'input-size + 32.')
@@ -177,7 +178,6 @@ if args.word2vec:
     net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset,
                          pretrained=args.pretrained)
 
-
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
@@ -219,6 +219,9 @@ if args.freeze_conv:
         param.requires_grad = False
     for param in fc.parameters():
         param.requires_grad = True
+
+if args.analysis_accuracy:
+    best_acc = 0
 
 # Training
 def train(epoch, analyzer):
@@ -313,6 +316,9 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     # Save checkpoint.
     acc = 100.*correct/total
     print("Accuracy: {}, {}/{}".format(acc, correct, total))
+    if args.analysis_accuracy:
+        acc = stat
+        
     if acc > best_acc and checkpoint:
         state = {
             'net': net.state_dict(),
