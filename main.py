@@ -215,7 +215,8 @@ if args.feature_attention:
 if args.freeze_conv:
     for param in net.parameters():
         param.requires_grad = False
-    fc.requires_grad = True
+    for param in fc.parameters():
+        param.requires_grad = True
 
 # Training
 def train(epoch, analyzer):
@@ -279,7 +280,10 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
                 inputs, predicates = inputs
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = net(inputs)
-            loss = criterion(outputs, targets)
+            if args.loss in ('SoftTreeSupMaskLoss'):
+                loss = criterion((fc, hooked_inputs), targets)
+            else:
+                loss = criterion(outputs, targets)
 
             test_loss += loss.item()
             _, predicted = outputs.max(1)
