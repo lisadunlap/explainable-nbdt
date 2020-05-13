@@ -245,7 +245,7 @@ class SoftTreeSupMaskLoss(SoftTreeSupLoss):
     def get_output_sub(_outputs, node, weighted_average, top_k, fc):
         # here, outputs is the feature vector instead of pre-softmax fc outputs
         # get attention mask that is already set
-        attention_mask = node.attention_mask
+        #attention_mask = node.attention_mask
         # or, calculate attention mask here
         classes_in_node = []
         for i in node.new_to_old_classes:
@@ -253,8 +253,7 @@ class SoftTreeSupMaskLoss(SoftTreeSupLoss):
         classes_in_node_fc = fc.weight[classes_in_node]
         classes_in_node_var = classes_in_node_fc.var(dim=0)
         _, attention_mask = classes_in_node_var.sort()
-        print(attention_mask)
-        exit(0)
+
 
         old_indices, new_indices = [], []
         for index_child in range(len(node.children)):
@@ -263,10 +262,8 @@ class SoftTreeSupMaskLoss(SoftTreeSupLoss):
             new_indices.extend([index_child] * len(old))
 
 
-        attention_zero_mask = np.array(attention_mask[int(top_k*len(attention_mask)):])
-
-        attention_zero_mask = np.repeat(attention_zero_mask[np.newaxis,:], _outputs.size(0), axis=0)
-        attention_zero_mask = torch.tensor(attention_zero_mask).long().to(_outputs.device)
+        attention_zero_mask = attention_mask[int(top_k*len(attention_mask)):]
+        attention_zero_mask = attention_zero_mask.reshape(1, -1).repeat((_outputs.size(0),1)).long()
         _outputs = _outputs.clone()
         _outputs.scatter_(1,attention_zero_mask,0.)
         #_outputs = torch.mm(_outputs, torch.transpose(fc, 0, 1))
