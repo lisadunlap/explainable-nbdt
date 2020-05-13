@@ -260,6 +260,8 @@ def train(epoch, analyzer):
             outputs = (fc, hooked_inputs)
 
         stat = analyzer.update_batch(outputs, predicted, targets)
+        if stat:
+            stat, analyzer_acc = stat
         extra = f'| {stat}' if stat else ''
 
         progress_bar(batch_idx, len(trainloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) %s'
@@ -301,6 +303,8 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
                 outputs = (fc, hooked_inputs)
 
             stat = analyzer.update_batch(outputs, predicted, targets)
+            if stat:
+                stat, analyzer_acc = stat
             extra = f'| {stat}' if stat else ''
 
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) %s'
@@ -320,7 +324,7 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     acc = 100.*correct/total
     print("Accuracy: {}, {}/{}".format(acc, correct, total))
     if args.analysis_accuracy:
-        acc = stat
+        acc = analyzer_acc
 
     if acc > best_acc and checkpoint:
         state = {
