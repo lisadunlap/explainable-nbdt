@@ -347,9 +347,11 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
 
     # add leaves
     center_to_wnid = {}
+    descendant_centers = {}
     for i, wnid in enumerate(wnids):
         center_to_wnid[i] = wnid
         vec_dict[wnid] = centers[i]
+        descendant_centers[wnid] = centers[i]
         G.add_node(wnid)
         set_node_label(G, wnid_to_synset(wnid))
 
@@ -371,6 +373,7 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
         parent = FakeSynset.create_from_offset(len(G.nodes))
         G.add_node(parent.wnid)
         index_to_wnid[index] = parent.wnid
+        descendant_centers[parent.wnid] = []
 
         child_vectors = []
         for child in pair:
@@ -378,11 +381,18 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
                 child_wnid = wnids[child]
             else:
                 child_wnid = index_to_wnid[child - n_classes]
+            descendant_centers.extend(descendant_centers[child_wnid])
             child_vectors.append(vec_dict[child_wnid])
             G.add_edge(parent.wnid, child_wnid)
+
         vec_dict[parent.wnid] = np.mean(child_vectors, axis=0)
         vec_diff = np.max(child_vectors, axis=0) - np.min(child_vectors, axis=0)
-        attention_dict[parent.wnid] = {'attention_mask': np.argsort(vec_diff).tolist()}
+        child_var = np.var(descendant_centers[parent.wnid], axis=0)
+        # sort by each child node's representation
+        #attention_dict[parent.wnid] = {'attention_mask': np.argsort(vec_diff).tolist()}
+        # sort by all descendant leaves' variance
+        attention_dict[parent.wnid] = {'attention_mask': np.argsort(child_var).tolist()}
+
 
     vect_dict = {wnid: {'feature_vector': vec_dict[wnid]} for wnid in vec_dict}
     nx.set_node_attributes(G, attention_dict)
