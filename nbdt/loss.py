@@ -244,7 +244,25 @@ class SoftTreeSupMaskLoss(SoftTreeSupLoss):
     @staticmethod
     def get_output_sub(_outputs, node, weighted_average, top_k, fc):
         # here, outputs is the feature vector instead of pre-softmax fc outputs
+        # get attention mask that is already set
         attention_mask = node.attention_mask
+        # or, calculate attention mask here
+        classes_in_node = []
+        for i in node.new_to_old_classes:
+            classes_in_node.extend(node.new_to_old_classes[i])
+        classes_in_node_fc = fc.weight[classes_in_node]
+        classes_in_node_var = classes_in_node_fc.var(dim=0)
+        _, attention_mask = classes_in_node_var.sort()
+        print(attention_mask)
+        exit(0)
+
+        old_indices, new_indices = [], []
+        for index_child in range(len(node.children)):
+            old = node.new_to_old_classes[index_child]
+            old_indices.extend(old)
+            new_indices.extend([index_child] * len(old))
+
+
         attention_zero_mask = np.array(attention_mask[int(top_k*len(attention_mask)):])
 
         attention_zero_mask = np.repeat(attention_zero_mask[np.newaxis,:], _outputs.size(0), axis=0)
