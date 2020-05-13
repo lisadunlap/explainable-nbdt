@@ -19,7 +19,8 @@ from gensim.models import Word2Vec
 from pathlib import Path
 
 # tree-generation consntants
-METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted', 'replace_node', 'insert_node', 'induced-attributes')
+METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted',
+           'replace_node', 'insert_node', 'induced-attributes', 'prettify')
 DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000',
             'TinyImagenet200CombineClasses', 'MiniPlaces', 'AnimalsWithAttributes2', 'CUB2011', 'MiniImagenet')
 
@@ -35,7 +36,7 @@ DATASET_TO_FOLDER_NAME = {
     'MiniPlaces': 'miniplaces',
     'AnimalsWithAttributes2': 'Animals_with_Attributes2',
     'CUB2011': 'CUB_200_2011',
-    'MiniImagenet': 'processed_images'
+    'MiniImagenet': 'mini-imagenet'
 }
 
 # main script constants
@@ -55,8 +56,8 @@ DEFAULT_AWA2_TREE = '/data/Animals_with_Attributes2/graph-default.json'
 DEFAULT_AWA2_WNID = './data/Animals_with_Attributes2/wnids.txt'
 DEFAULT_CUB_TREE = '/data/CUB_200_2011/graph-default.json'
 DEFAULT_CUB_WNID = './data/CUB_200_2011/wnids.txt'
-DEFAULT_MiniImagenet_TREE = '../mini-imagenet-tools/processed_images/graph-default.json'
-DEFAULT_MiniImagenet_WNID = '../mini-imagenet-tools/processed_images/wnids_train.txt'
+DEFAULT_MiniImagenet_TREE = './data/mini-imagenet/graph-default.json'
+DEFAULT_MiniImagenet_WNID = './data/mini-imagenet/wnids.txt'
 
 
 DATASET_TO_PATHS = {

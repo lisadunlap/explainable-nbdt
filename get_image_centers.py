@@ -20,10 +20,12 @@ import models
 from PIL import Image, ImageOps
 from PIL.ImageColor import getcolor
 from numpy import linalg as LA
+from scipy.spatial.distance import cosine
 
 from nbdt.utils import (
     generate_fname, populate_kwargs, Colors, get_saved_word2vec, DATASET_TO_FOLDER_NAME, get_word_embedding, get_transform_from_name
 )
+from nbdt.graph import wnid_to_synset
 
 datasets = ('CIFAR10', 'CIFAR100') + data.imagenet.names + data.custom.names + data.awa2.names
 
@@ -81,9 +83,9 @@ populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
 
 if args.dataset == 'MiniImagenet':
     trainset = dataset(**dataset_kwargs, root='./data',
-                       zeroshot=args.zeroshot_dataset, train=True, download=True, transform=transform_train)
+                       train=False, download=True, transform=transform_test)
     testset = dataset(**dataset_kwargs, root='./data',
-                      zeroshot=args.zeroshot_dataset, train=False, download=True, transform=transform_test)
+                      zeroshot=True, train=False, download=True, transform=transform_test)
 else:
     trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
     testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
@@ -150,14 +152,16 @@ if args.resume:
             Colors.cyan(f'==> Checkpoint found at {resume_path}')
 
 # get one sample of each zeroshot class, and get its output at linear layer
-if args.dataset == 'MiniImagenet':
-    cls_to_vec = {trainset.classes[cls]:[] for i, cls in enumerate(list(range(64, 84)))}
-elif args.new_classes is None:
-    cls_to_vec = {cls: [] for i, cls in enumerate(testset.classes) if i in args.new_labels}
-else:
-    cls_to_vec = {cls: [] for cls in args.new_classes}
+# cls_to_vec = {trainset.classes[cls]:[] for i, cls in enumerate(list(range(64, 84)))}
+#
+# current_weights = {testset.classes[cls]:[] for i, cls in enumerate(list(range(64)))}
 
-print(cls_to_vec)
+zs_labels = (args.new_labels)
+
+current_weights = {trainset.classes[cls]:[] for i, cls in enumerate(list(set(range(50)).difference(zs_labels)))}
+
+cls_to_vec = {testset.classes[cls]:[] for i, cls in enumerate(list(zs_labels))}
+
 hooked_inputs = None
 
 def testhook(self, input, output):
@@ -173,13 +177,31 @@ fc.register_forward_hook(testhook)
 
 net.eval()
 
-# load projection matrix
-if args.word2vec:
-    word2vec_path = os.path.join(os.path.join(trainset.root, DATASET_TO_FOLDER_NAME[args.dataset]), "word2vec/")
-
 num_samples = 0
 with torch.no_grad():
     for i, (inputs, labels) in enumerate(trainloader):
+        if args.dataset in ("AnimalsWithAttributes2"):
+            inputs, predicates = inputs
+        net(inputs)
+
+        for vec, label in zip(hooked_inputs, labels):
+            cls_name = trainset.classes[label]
+            if cls_name in current_weights:
+                current_weights[cls_name].append(vec)
+
+    for cls in current_weights:
+        print(f"{cls} with length {len(current_weights[cls])}")
+        current_weights[cls] = np.average(np.array(current_weights[cls]), axis=0)
+        current_weights[cls] /= LA.norm(current_weights[cls])
+
+def get_most_similar(c, cls_to_vec, weights):
+    #dist = {cls: cosine(cls_to_vec[c], weights[cls]) for cls in weights}
+    dist = {cls: LA.norm(cls_to_vec[c]-weights[cls]) for cls in weights}
+    print(dist)
+    return min(dist, key=dist.get)
+
+with torch.no_grad():
+    for i, (inputs, labels) in enumerate(testloader):
         if args.dataset in ("AnimalsWithAttributes2"):
             inputs, predicates = inputs
         net(inputs)
@@ -191,43 +213,29 @@ with torch.no_grad():
                 break
             cls_name = trainset.classes[label]
             if cls_name in cls_to_vec and len(cls_to_vec[cls_name]) < args.num_samples:
-                if args.word2vec:
-                    word_vec = get_saved_word2vec(word2vec_path + cls_name + '.npy', args.dimension)
-                    cls_to_vec[cls_name] = word_vec
-                else:
-                    cls_to_vec[cls_name].append(vec)
+                cls_to_vec[cls_name].append(vec)
                 num_samples = min([len(cls_to_vec[c]) for c in cls_to_vec])
 
     for cls in cls_to_vec:
+        print(f"{cls} with length {len(cls_to_vec[cls])}")
         cls_to_vec[cls] = np.average(np.array(cls_to_vec[cls]), axis=0)
-        cls_to_vec[cls] -= np.mean(cls_to_vec[cls])
         cls_to_vec[cls] /= LA.norm(cls_to_vec[cls])
-
-    # insert vectors into linear layer for model
 
     fc_weights = fc.weight.cpu().numpy()
 
-    for i, cls in enumerate(trainset.classes):
-        if cls in cls_to_vec:
-            if args.replace:
-                fc_weights[i] = cls_to_vec[cls]
-            else:
-                fc_weights = np.insert(fc_weights, i, cls_to_vec[cls], axis=0)
-        else:
-            fc_weights[i] -= np.mean(fc_weights[i])
-            fc_weights[i] /= LA.norm(fc_weights[i])
+    pairings = {c: None for c in cls_to_vec}
+    for cls in cls_to_vec:
+        pairings[cls] = get_most_similar(cls, cls_to_vec, current_weights)
+        print(f"{cls}: {pairings[cls]}")
+        # print(f"{wnid_to_synset(cls).name().split('.')[0]}: {wnid_to_synset(pairings[cls]).name().split('.')[0]}")
+    print(pairings)
 
-    setattr(net.module, key, nn.Linear(fc_weights.shape[1], len(trainset.classes)))
-    setattr(getattr(net.module, key), "weight", nn.Parameter(torch.from_numpy(fc_weights)))
-
-    # save model
-    state = {
-        'net': net.state_dict(),
-        'acc': best_acc,
-        'epoch': start_epoch,
-    }
-    if not os.path.isdir('checkpoint'):
-        os.mkdir('checkpoint')
-
-    print(f'Saving to {checkpoint_fname}..')
-    torch.save(state, f'./checkpoint/{checkpoint_fname}.pth')
+#
+#
+# new_classes = [testset.classes[i] for i in list(range(64, 84))]
+# pairings = {c: None for c in new_classes}
+# for c in new_classes:
+#     pairings[c] = get_most_similar(c, cls_to_vec, new_classes)
+#     print(f"{wnid_to_synset(c).name().split('.')[0]}: {wnid_to_synset(pairings[c]).name().split('.')[0]}")
+#
+# print(pairings)

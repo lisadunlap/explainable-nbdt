@@ -346,6 +346,7 @@ class HardFullTreePrior(Noop):
         self.class_accuracies = {c: 0 for c in self.classes}
         self.class_totals = {c: 0 for c in self.classes}
         self.top_k = top_k
+        self.ignored_classes = ()
 
     def update_batch(self, outputs, predicted, targets):
         wnid_to_pred_selector = {}
@@ -436,6 +437,7 @@ class HardFullTreePrior(Noop):
                 pass
             G = nx.DiGraph(self.G)
             for node in self.G.nodes():
+                ignore=self.class_counts[cls] == 0
                 G.nodes[node]['weight'] = self.node_counts[cls][node] / (self.class_counts[cls] + 1e-4)
             G.nodes[get_root(self.G)]['weight'] = 1
             json_data = node_link_data(G)
@@ -444,16 +446,17 @@ class HardFullTreePrior(Noop):
                 cls = self.wnid_to_name[cls]
             except:
                 pass
-            cls_path = path + cls + '.json'
-            with open(cls_path, 'w') as f:
-                json.dump(json_data, f)
-            print("Json saved to %s" % cls_path)
-            root = next(get_roots(G))
-            tree = build_tree(G, root)
-            generate_vis(os.getcwd() + '/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
-            if self.use_wandb:
-                wandb.log({cls + "-path": wandb.Html(open(cls_path.replace('.json', '') + '-tree.html'), inject=False)})
-            print("Json saved to %s" % cls_path)
+            if not ignore:
+                cls_path = path + cls + '.json'
+                with open(cls_path, 'w') as f:
+                    json.dump(json_data, f)
+                print("Json saved to %s" % cls_path)
+                root = next(get_roots(G))
+                tree = build_tree(G, root)
+                generate_vis(os.getcwd() + '/vis/tree-weighted-template.html', tree, 'tree', cls, out_dir=path)
+                if self.use_wandb:
+                    wandb.log({cls + "-path": wandb.Html(open(cls_path.replace('.json', '') + '-tree.html'), inject=False)})
+                print("Json saved to %s" % cls_path)
 
 
 class HardTrackNodes(HardFullTreePrior):

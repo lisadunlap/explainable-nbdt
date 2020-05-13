@@ -18,7 +18,7 @@ class AnimalsWithAttributes2(Dataset):
     train_ratio = 0.8
 
     """
-    helpful notes - indices of zeroshot classes are, 5, 13, 14, 17, 23, 24, 33, 38, 41
+    helpful notes - indices of zeroshot classes are, 5, 13, 14, 17, 23, 24, 33, 38, 41, 48
     """
 
     def __init__(self, root, transform=None, train=True, download=False, shuffle=False, binary=True, zeroshot_dataset=False,

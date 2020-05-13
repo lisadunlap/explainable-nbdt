@@ -7,6 +7,7 @@ import urllib.request
 import shutil
 import torch
 from PIL import Image
+import pandas as pd
 
 
 
@@ -176,53 +177,52 @@ class MiniImagenet(Dataset):
 
     dataset = None
 
-    def __init__(self, root='../mini-imagenet-tools/processed_images',
-            *args, train=True, zeroshot=False, **kwargs):
+    def __init__(self, root='./data',
+            drop_classes=False, *args, train=True, zeroshot=False, **kwargs):
         super().__init__()
 
-        self.root = root
+        self.root = os.path.join(root, 'mini-imagenet')
         if train:
             self.transform = self.transform_train()
         else:
             self.transform = self.transform_val()
         self.zeroshot = zeroshot
+        self.drop_classes = drop_classes
         self.classes = self.get_classes()
         self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
         self.train = train
         print("getting paths")
-        self.get_paths()
+        if self.zeroshot:
+            self.df = pd.read_csv('./data/mini-imagenet/csv_files/test.csv')
+        else:
+            self.df = pd.read_csv('./data/mini-imagenet/csv_files/train.csv')
+            if self.train:
+                for l in self.df.label.unique():
+                    self.df[self.df['label'] == l] = self.df[self.df['label'] == l][:450]
+                    self.df = self.df.dropna()
+            else:
+                for l in self.df.label.unique():
+                    self.df[self.df['label'] == l] = self.df[self.df['label'] == l][450:]
+                    self.df = self.df.dropna()
 
     def get_classes(self):
         classes = []
-        if not self.zeroshot:
-            classes_path = self.root.replace('train', '').replace('val', '') + '/classes_train.txt'
+        if not self.zeroshot and self.drop_classes:
+            classes_path = self.root + '/classes_train.txt'
         else:
-            classes_path = self.root.replace('train', '').replace('val', '') + '/classes.txt'
+            classes_path = self.root + '/classes.txt'
         with open(classes_path, 'r') as f:
             for i, line in enumerate(f):
                 cls = line.strip().split('\t')
                 classes += cls
         return classes
 
-    def get_paths(self):
-        self.paths = []
-        self.path_to_class = {}
-        if self.zeroshot:
-            classes_path = self.root.replace('train', '').replace('val', '') + '/zeroshot_paths.txt'
-        elif self.train:
-            classes_path = self.root.replace('train', '').replace('val', '')+'/train_paths.txt'
-        else:
-            classes_path = self.root.replace('train', '').replace('val', '') + '/test_paths.txt'
-        with open(classes_path) as f:
-            for line in f.readlines():
-                path = line.strip()
-                self.paths.append(path)
-                self.path_to_class[path] = self.classes.index(path.split('/')[-2])
 
     @staticmethod
     def transform_train(input_size=84):
         return transforms.Compose([
-            transforms.RandomResizedCrop(input_size),  # TODO: may need updating
+            transforms.Resize(84),
+            transforms.RandomCrop(input_size, padding=8),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
@@ -231,17 +231,45 @@ class MiniImagenet(Dataset):
     @staticmethod
     def transform_val(input_size=84):
         return transforms.Compose([
-            transforms.Resize(input_size + 32),
-            transforms.CenterCrop(input_size),
+            transforms.Resize(84),
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
 
     def __getitem__(self, i):
-        image = Image.open(self.paths[i])
-        label = self.path_to_class[self.paths[i]]
+        row = self.df.iloc[i]
+        if self.zeroshot:
+            path = self.root+'/test/' + row['label'] + '/' + row['filename']
+        else:
+            path = self.root + '/train/' + row['label'] + '/' + row['filename']
+        image = Image.open(path)
+        label = self.classes.index(row['label'])
         image = self.transform(image)
         return image, label
 
     def __len__(self):
-        return len(self.paths)
+        return len(self.df)
+
+class TieredImagenet(MiniImagenet):
+    """MiniImageNet dataloader (need to have already downloaded imagenet and
+    exracted mini imagenet or download from:
+    https://drive.google.com/drive/folders/137M9jEv8nw0agovbUiEN_fPl_waJ2jIj"""
+
+    dataset = None
+
+    def __init__(self, root='./data',
+            drop_classes=False, *args, train=True, zeroshot=False, **kwargs):
+        super().__init__()
+
+        self.root = os.path.join(root, 'tiered-imagenet')
+        if train:
+            self.transform = self.transform_train()
+        else:
+            self.transform = self.transform_val()
+        self.zeroshot = zeroshot
+        self.drop_classes = drop_classes
+        self.classes = self.get_classes()
+        self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
+        self.train = train
+        print("getting paths")
+        self.get_paths()

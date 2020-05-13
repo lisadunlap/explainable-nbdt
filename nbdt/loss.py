@@ -201,16 +201,15 @@ class SoftTreeSupMaskLoss(SoftTreeSupLoss):
 
     def forward(self, outputs, targets):
         fc, outputs = outputs
-        print(fc.requires_grad)
         #loss = self.criterion(torch.mm(outputs, torch.transpose(fc, 0, 1)), targets)
         loss = self.criterion(fc(outputs), targets)
         bayesian_outputs = SoftTreeSupMaskLoss.inference(
-            self.nodes, outputs, fc, self.num_classes, self.weighted_average, self.top_k)
+            self.nodes, (fc, outputs), self.num_classes, self.weighted_average, self.top_k)
         loss += self.criterion(bayesian_outputs, targets) * self.tree_supervision_weight
         return loss
 
     @classmethod
-    def inference(cls, nodes, outputs, fc, num_classes, weighted_average=False, top_k=0.5):
+    def inference(cls, nodes, outputs, num_classes, weighted_average=False, top_k=0.5):
         """
         In theory, the loop over children below could be replaced with just a
         few lines:
@@ -222,6 +221,7 @@ class SoftTreeSupMaskLoss(SoftTreeSupLoss):
         However, we collect all indices first, so that only one tensor operation
         is run.
         """
+        fc, outputs = outputs
         class_probs = torch.ones((outputs.size(0), num_classes)).to(outputs.device)
         for node in nodes:
             output = cls.get_output_sub(outputs, node, weighted_average, top_k, fc)
@@ -249,7 +249,7 @@ class SoftTreeSupMaskLoss(SoftTreeSupLoss):
 
         attention_zero_mask = np.repeat(attention_zero_mask[np.newaxis,:], _outputs.size(0), axis=0)
         attention_zero_mask = torch.tensor(attention_zero_mask).long().to(_outputs.device)
-
+        _outputs = _outputs.clone()
         _outputs.scatter_(1,attention_zero_mask,0.)
         #_outputs = torch.mm(_outputs, torch.transpose(fc, 0, 1))
         _outputs = fc(_outputs)

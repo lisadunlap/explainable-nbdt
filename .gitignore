@@ -5,6 +5,13 @@ data/*
 !data/cifar100/wnids.txt
 !data/tiny-imagenet-200-custom/wnids.txt
 !data/cifar10-combine/wnids.txt
+!data/mini-imagenet/wnids.txt
+!data/mini-imagenet/classes.txt
+!data/mini-imagenet/test_paths.txt
+!data/mini-imagenet/train_paths.txt
+!data/mini-imagenet/zeroshot_paths.txt
+!data/mini-imagenet/classes_train.txt
+!data/mini-imagenet/classes_val.txt
 checkpoint
 out/*
 
