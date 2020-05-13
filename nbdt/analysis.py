@@ -144,9 +144,11 @@ class HardEmbeddedDecisionRules(Noop):
     accepts_path_wnids = True
     accepts_weighted_average = True
     accepts_ignore_labels = True
+    accepts_feature_attention = True
+    accepts_top_k = True
 
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids, ignore_labels=[],
-            weighted_average=False, use_wandb=False, run_name="HardEmbeddedDecisionRules"):
+            weighted_average=False, use_wandb=False, run_name="HardEmbeddedDecisionRules", top_k=0.75, feature_attention=False):
         super().__init__(trainset, testset, experiment_name, use_wandb,
                          run_name=run_name)
         self.nodes = Node.get_nodes(path_graph, path_wnids, trainset.classes)
@@ -163,6 +165,8 @@ class HardEmbeddedDecisionRules(Noop):
         self.total = 0
         self.class_accuracies = {c:0 for c in self.classes}
         self.class_totals = {c: 0 for c in self.classes}
+        self.top_k = top_k
+        self.feature_attention = feature_attention
 
 
     def update_batch(self, outputs, predicted, targets):
@@ -228,15 +232,19 @@ class SoftEmbeddedDecisionRules(HardEmbeddedDecisionRules):
     """Evaluation is soft."""
 
     def __init__(self, trainset, testset, experiment_name, path_graph, path_wnids,
-            weighted_average=False, use_wandb=False, run_name="SoftEmbeddedDecisionRules"):
+            weighted_average=False, use_wandb=False, run_name="SoftEmbeddedDecisionRules", top_k=0.75, feature_attention=False):
         super().__init__(trainset, testset, experiment_name, path_graph, path_wnids, use_wandb,
-                         run_name=run_name)
+                         run_name=run_name, top_k=top_k, feature_attention=feature_attention)
         self.num_classes = len(trainset.classes)
 
     def update_batch(self, outputs, predicted, targets):
-        bayesian_outputs = SoftTreeSupLoss.inference(
-            self.nodes, outputs, self.num_classes, self.weighted_average)
-        n_samples = outputs.size(0)
+        if self.feature_attention:
+            bayesian_outputs = SoftTreeSupMaskLoss.inference(self.nodes, outputs, self.num_classes, self.weighted_average, self.top_k)
+            n_samples = outputs[1].size(0)
+        else:
+            bayesian_outputs = SoftTreeSupLoss.inference(
+                self.nodes, outputs, self.num_classes, self.weighted_average)
+            n_samples = outputs.size(0)
         predicted = bayesian_outputs.max(1)[1].to(targets.device)
         self.total += n_samples
         self.correct += (predicted == targets).sum().item()
