@@ -355,7 +355,7 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
         G.add_node(wnid)
         set_node_label(G, wnid_to_synset(wnid))
 
-    centers = centers.numpy()
+    #centers = centers.numpy()
     for d in range(centers.shape[1]):
         centers[:, d] -= np.mean(centers[:, d])
         centers[:, d] /= LA.norm(centers[:, d])
@@ -381,7 +381,7 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
                 child_wnid = wnids[child]
             else:
                 child_wnid = index_to_wnid[child - n_classes]
-            descendant_centers.extend(descendant_centers[child_wnid])
+            descendant_centers[parent.wnid].extend(descendant_centers[child_wnid])
             child_vectors.append(vec_dict[child_wnid])
             G.add_edge(parent.wnid, child_wnid)
 
@@ -395,8 +395,8 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
 
 
     vect_dict = {wnid: {'feature_vector': vec_dict[wnid]} for wnid in vec_dict}
-    nx.set_node_attributes(G, attention_dict)
-    nx.set_node_attributes(G, vect_dict)
+    #nx.set_node_attributes(G, attention_dict)
+    #nx.set_node_attributes(G, vect_dict)
 
     # add originally ignored labels
     for label in ignore_labels:
