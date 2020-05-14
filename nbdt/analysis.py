@@ -192,7 +192,7 @@ class HardEmbeddedDecisionRules(Noop):
             self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
             self.class_totals[self.classes[targets[i]]] += 1
         accuracy = round(self.correct / float(self.total), 4) * 100
-        return f'NBDT-Hard: {accuracy}%'
+        return f'NBDT-Hard: {accuracy}%', accuracy
 
     def traverse_tree(self, _, wnid_to_pred_selector, n_samples):
         wnid_root = get_root(self.G)
@@ -252,7 +252,7 @@ class SoftEmbeddedDecisionRules(HardEmbeddedDecisionRules):
             self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
             self.class_totals[self.classes[targets[i]]] += 1
         accuracy = round(self.correct / float(self.total), 4) * 100
-        return f'NBDT-Soft: {accuracy}%'
+        return f'NBDT-Soft: {accuracy}%', accuracy
 
     def end_test(self, epoch):
         accuracy = round(self.correct / self.total * 100., 2)
@@ -380,7 +380,7 @@ class HardFullTreePrior(Noop):
         self.correct += np.sum((predicted == targets.numpy()))
         self.total += len(paths)
         accuracy = round(self.correct / self.total, 4) * 100
-        return f'TreePrior: {accuracy}%'
+        return f'TreePrior: {accuracy}%', accuracy
 
     # return leaf node wnids corresponding to each output
     def traverse_tree(self, wnid_to_pred_selector, nsamples, targets):
@@ -564,7 +564,7 @@ class SoftFullTreePrior(HardFullTreePrior):
         self.correct += np.sum((predicted == targets.numpy()))
         self.total += len(paths)
         accuracy = round(self.correct / self.total, 4) * 100
-        return f'TreePrior: {accuracy}%'
+        return f'TreePrior: {accuracy}%', accuracy
 
     # return leaf node wnids corresponding to each output
     def traverse_tree(self, wnid_to_pred_selector, nsamples, targets):
@@ -680,7 +680,7 @@ class SoftFullTreeOODPrior(SoftFullTreePrior):
             self.class_counts[self.ood_classes[cls]] += 1
 
         accuracy = -1 # cannot evaluate accuracy for OOD samples
-        return f'TreePrior: {accuracy}%'
+        return f'TreePrior: {accuracy}%', accuracy
 
     # return leaf node wnids corresponding to each output
     def traverse_tree(self, wnid_to_pred_selector, nsamples, targets):
