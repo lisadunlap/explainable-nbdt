@@ -201,9 +201,11 @@ def exp_lr_scheduler(epoch, init_lr=0.0001, lr_decay_epoch=30, weight=0.1):
     return lr
 
 hooked_inputs = None
+should_hook = False
 def testhook(self, input, output):
     global hooked_inputs
-    hooked_inputs = input[0]
+    if should_hook:
+        hooked_inputs = input[0]
 
 keys = ['fc', 'linear']
 for key in keys:
@@ -225,6 +227,7 @@ if args.analysis_accuracy:
 
 # Training
 def train(epoch, analyzer):
+    global should_hook
     analyzer.start_train(epoch)
     if args.dataset in ("MiniPlaces",):
         lr = exp_lr_scheduler(epoch)
@@ -243,7 +246,9 @@ def train(epoch, analyzer):
             inputs, predicates = inputs
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
+        should_hook = True
         outputs = net(inputs)
+        should_hook = False
         if args.feature_attention:
             loss = criterion((fc, hooked_inputs), targets)
         else:
@@ -271,6 +276,7 @@ def train(epoch, analyzer):
 
 def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     analyzer.start_test(epoch)
+    global should_hook
     global testloader
     if ood_loader:
         testloader = ood_loader
@@ -284,12 +290,13 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
             if args.dataset in ("AnimalsWithAttributes2"):
                 inputs, predicates = inputs
             inputs, targets = inputs.to(device), targets.to(device)
+            should_hook = True
             outputs = net(inputs)
+            should_hook = False
             if args.loss in ('SoftTreeSupMaskLoss'):
-                loss = criterion((fc, hooked_inputs), targets)
+                loss = criterion((fc, torch.tensor(hooked_inputs)), targets)
             else:
                 loss = criterion(outputs, targets)
-
             test_loss += loss.item()
             _, predicted = outputs.max(1)
             total += targets.size(0)
