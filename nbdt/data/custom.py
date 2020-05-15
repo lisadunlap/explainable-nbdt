@@ -50,7 +50,8 @@ def add_arguments(parser):
     parser.add_argument('--combine-classes', nargs='+', type=str, action='append')
     parser.add_argument('--drop-classes', action='store_true')
     parser.add_argument('--zeroshot-dataset', action='store_true')
-
+    parser.add_argument('--fewshot-dataset', action='store_true')
+    parser.add_argument('--n-fewshot', type=int, default=1)
 
 
 def set_default_values(args):

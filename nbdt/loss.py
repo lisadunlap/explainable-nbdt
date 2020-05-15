@@ -263,11 +263,14 @@ class SoftTreeSupMaskLoss(SoftTreeSupLoss):
 
 
         attention_zero_mask = attention_mask[int(top_k*len(attention_mask)):]
+
         attention_zero_mask = attention_zero_mask.reshape(1, -1).repeat((_outputs.size(0),1)).long()
         _outputs = _outputs.clone()
         _outputs.scatter_(1,attention_zero_mask,0.)
+
         #_outputs = torch.mm(_outputs, torch.transpose(fc, 0, 1))
         _outputs = fc(_outputs)
+
 
         if weighted_average:
             node.move_leaf_weights_to(_outputs.device)

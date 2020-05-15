@@ -178,7 +178,7 @@ class MiniImagenet(Dataset):
     dataset = None
 
     def __init__(self, root='./data',
-            drop_classes=False, *args, train=True, zeroshot=False, **kwargs):
+            drop_classes=False, *args, train=True, zeroshot=False, fewshot=False, n_fewshot=5, **kwargs):
         super().__init__()
 
         self.root = os.path.join(root, 'mini-imagenet')
@@ -187,6 +187,8 @@ class MiniImagenet(Dataset):
         else:
             self.transform = self.transform_val()
         self.zeroshot = zeroshot
+        self.fewshot = fewshot
+        self.n_fewshot = n_fewshot
         self.drop_classes = drop_classes
         self.classes = self.get_classes()
         self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
@@ -204,6 +206,18 @@ class MiniImagenet(Dataset):
                 for l in self.df.label.unique():
                     self.df[self.df['label'] == l] = self.df[self.df['label'] == l][450:]
                     self.df = self.df.dropna()
+        if self.fewshot:
+            df_fewshot = pd.read_csv('./data/mini-imagenet/csv_files/test.csv')
+            if self.train:
+                for l in df_fewshot.label.unique():
+                    df_fewshot[df_fewshot['label'] == l] = df_fewshot[df_fewshot['label'] == l][:n_fewshot]
+                    df_fewshot = df_fewshot.dropna()
+            else:
+                for l in df_fewshot.label.unique():
+                    df_fewshot[df_fewshot['label'] == l] = df_fewshot[df_fewshot['label'] == l][n_fewshot:]
+                    df_fewshot = df_fewshot.dropna()
+            self.df_fewshot = df_fewshot
+
 
     def get_classes(self):
         classes = []
@@ -237,17 +251,24 @@ class MiniImagenet(Dataset):
         ])
 
     def __getitem__(self, i):
-        row = self.df.iloc[i]
-        if self.zeroshot:
-            path = self.root+'/test/' + row['label'] + '/' + row['filename']
+        if self.fewshot and i >= len(self.df):
+            row = self.df_fewshot.iloc[i - len(self.df)]
+            path = self.root + '/test/' + row['label'] + '/' + row['filename']
         else:
-            path = self.root + '/train/' + row['label'] + '/' + row['filename']
+            row = self.df.iloc[i]
+            if self.zeroshot:
+                path = self.root + '/test/' + row['label'] + '/' + row['filename']
+            else:
+                path = self.root + '/train/' + row['label'] + '/' + row['filename']
+
         image = Image.open(path)
         label = self.classes.index(row['label'])
         image = self.transform(image)
         return image, label
 
     def __len__(self):
+        if self.fewshot:
+            return len(self.df) + len(self.df_fewshot)
         return len(self.df)
 
 class TieredImagenet(MiniImagenet):
