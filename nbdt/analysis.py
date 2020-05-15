@@ -86,6 +86,9 @@ class Noop:
     def write_to_csv(self, path):
         pass
 
+    def reset_total(self):
+        pass
+
 
 class ConfusionMatrix(Noop):
 
@@ -168,6 +171,9 @@ class HardEmbeddedDecisionRules(Noop):
         self.top_k = top_k
         self.feature_attention = feature_attention
 
+    def reset_total(self):
+        self.total = 0
+        self.correct = 0
 
     def update_batch(self, outputs, predicted, targets):
         super().update_batch(outputs, predicted, targets)

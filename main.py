@@ -228,6 +228,7 @@ if args.analysis_accuracy:
 # Training
 def train(epoch, analyzer):
     global should_hook
+    analyzer.reset_total()
     analyzer.start_train(epoch)
     if args.dataset in ("MiniPlaces",):
         lr = exp_lr_scheduler(epoch)
@@ -276,6 +277,7 @@ def train(epoch, analyzer):
 
 def test(epoch, analyzer, checkpoint=True, ood_loader=None):
     analyzer.start_test(epoch)
+    analyzer.reset_total()
     global should_hook
     global testloader
     if ood_loader:
@@ -294,7 +296,7 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
             outputs = net(inputs)
             should_hook = False
             if args.loss in ('SoftTreeSupMaskLoss'):
-                loss = criterion((fc, torch.tensor(hooked_inputs)), targets)
+                loss = criterion((fc, hooked_inputs), targets)
             else:
                 loss = criterion(outputs, targets)
             test_loss += loss.item()
