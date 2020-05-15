@@ -60,6 +60,8 @@ parser.add_argument("--track_nodes", nargs="*", type=str, help="nodes to keep tr
 parser.add_argument("--train-word2vec", action='store_true', help="fit model to pretrained weights")
 parser.add_argument('--freeze-classes',  nargs="*", type=str, help="classes whose FC weights should freeze")
 parser.add_argument('--weight-decay', type=float, default=5e-4)
+parser.add_argument('--analysis-checkpoint', action='store_true',
+                    help='if we want to save checkpoints by something other than normal inference')
 
 data.custom.add_arguments(parser)
 loss.add_arguments(parser)
@@ -94,10 +96,10 @@ populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
 if args.dataset == 'MiniImagenet':
     trainset = dataset(**dataset_kwargs, root='./data',
                        zeroshot=args.zeroshot_dataset, train=True, download=True,
-                       drop_classes=args.drop_classes, transform=transform_train)
+                       drop_classes=args.drop_classes)
     testset = dataset(**dataset_kwargs, root='./data',
                       zeroshot=args.zeroshot_dataset, train=False, download=True,
-                      drop_classes=args.drop_classes, transform=transform_test)
+                      drop_classes=args.drop_classes)
 else:
     trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
     testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
@@ -260,7 +262,8 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
             test_loss += loss.item()
             _, predicted = outputs.max(1)
             total += targets.size(0)
-            correct += predicted.eq(targets).sum().item()
+            if not args.analysis_checkpoint:
+                correct += predicted.eq(targets).sum().item()
 
             if device == 'cuda':
                 predicted = predicted.cpu()
@@ -268,6 +271,9 @@ def test(epoch, analyzer, checkpoint=True, ood_loader=None):
 
             stat = analyzer.update_batch(outputs, predicted, targets)
             extra = f'| {stat}' if stat else ''
+            if args.analysis_checkpoint:
+                correct += stat
+
 
             progress_bar(batch_idx, len(testloader), 'Loss: %.3f | Acc: %.3f%% (%d/%d) %s'
                 % (test_loss/(batch_idx+1), 100.*correct/total, correct, total, extra))
