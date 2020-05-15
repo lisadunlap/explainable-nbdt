@@ -444,45 +444,53 @@ def normalize_weights(net, pretrained=True):
     return net
 
 class LabelSmoothingLoss(nn.Module):
-    def __init__(self, classes, smoothing=0.0, dim=-1):
+    def __init__(self, classes, smoothing=0.0, dim=-1, seen_to_zsl_cls={}):
         super(LabelSmoothingLoss, self).__init__()
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
         self.cls = classes
         self.dim = dim
+        self.seen_to_zsl_cls = seen_to_zsl_cls
+
+    def smooth_one_hot(self, labels):
+        """ Create Soft Label """
+        assert 0 <= self.smoothing < 1
+        num_classes = len(self.cls)
+        label_shape = torch.Size((labels.size(0), num_classes))
+        confidence = 1.0 - self.smoothing
+
+        if self.smoothing == 0 or not self.seen_to_zsl_cls:
+            return torch.zeros_like(label_shape).scatter_(1, labels.data.unsqueeze(1), confidence)
+
+        with torch.no_grad():
+            true_dist = torch.zeros(size=label_shape, device=labels.device)
+            true_dist.scatter_(1, labels.data.unsqueeze(1), 1)
+        for seen, zsl in self.seen_to_zsl_cls.items():
+            zsl_idx, seen_idx = self.cls.index(zsl), self.cls.index(seen)
+            seen_selector = torch.zeros_like(labels.data.unsqueeze(1))
+            seen_selector[true_dist[:, seen_idx] == 1] = seen_idx
+            zsl_selector = torch.zeros_like(labels.data.unsqueeze(1))
+            zsl_selector[true_dist[:, seen_idx] == 1] = zsl_idx
+            true_dist.scatter_(1, seen_selector, confidence)
+            true_dist.scatter_(1, zsl_selector, self.smoothing)
+        return true_dist
 
     def forward(self, pred, target):
         pred = pred.log_softmax(dim=self.dim)
         with torch.no_grad():
             # true_dist = pred.data.clone()
-            true_dist = torch.zeros_like(pred)
-            true_dist.fill_(self.smoothing / (self.cls - 1))
-            true_dist.scatter_(1, target.data.unsqueeze(1), self.confidence)
-        return torch.mean(torch.sum(-true_dist * pred, dim=self.dim))
+            soft_label = self.smooth_one_hot(target)
+        return torch.mean(torch.sum(-soft_label * pred, dim=self.dim))
 
-def smooth_one_hot(true_labels: torch.Tensor, classes: int, smoothing=0.0):
-    """
-    if smoothing == 0, it's one-hot method
-    if 0 < smoothing < 1, it's smooth method
+class MaskLoss(nn.Module):
+    def __init__(self, size_average=None, reduce=None, reduction='mean'):
+        super(MaskLoss, self).__init__()
+        self.reduction = reduction
 
-    How to use:
-    Loss = CrossEntropyLoss(NonSparse=True, ...)
-    . . .
-    data = ...
-    labels = ...
-
-    outputs = model(data)
-
-    smooth_label = smooth_one_hot(labels, ...)
-    loss = (outputs, smooth_label)
-    ...
-
-    """
-    assert 0 <= smoothing < 1
-    confidence = 1.0 - smoothing
-    label_shape = torch.Size((true_labels.size(0), classes))
-    with torch.no_grad():
-        true_dist = torch.empty(size=label_shape, device=true_labels.device)
-        true_dist.fill_(smoothing / (classes - 1))
-        true_dist.scatter_(1, true_labels.data.unsqueeze(1), confidence)
-    return true_dist
+    def forward(self, input, target):
+        N, W = input.size()
+        A = torch.min(input, target)
+        values, index = torch.max(target, 0)
+        B = 1/(1+torch.exp(-100*(target-.55*values)))
+        return torch.mean(2*torch.div(torch.sum(torch.bmm(A.view(N, 1, W), B.view(N, W, 1)).view(N), dim=-1),
+                           torch.sum(input+target, axis=-1)), dim=-1)

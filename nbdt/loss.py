@@ -254,3 +254,168 @@ class HardTreeSupLossMultiPath(HardTreeSupLoss):
             return selector, _outputs[:, :node.num_classes], targets_sub
         outputs_sub = cls.get_output_sub(_outputs, node, weighted_average)
         return selector, outputs_sub, targets_sub
+
+class HardAttentionLoss(HardTreeSupLoss):
+
+    def __init__(self, gcam, path_graph, path_wnids, classes,
+                 max_leaves_supervised=-1, min_leaves_supervised=-1,
+                 tree_supervision_weight=1., weighted_average=False,
+                 criterion=nn.CrossEntropyLoss()):
+        super().__init__(path_graph, path_wnids, classes,
+                 max_leaves_supervised, min_leaves_supervised,
+                 tree_supervision_weight, weighted_average, criterion)
+        self.gcam = gcam
+        #self.mask_loss = MaskLoss()
+        self.mask_loss = nn.KLDivLoss()
+
+    def forward(self, outputs, targets):
+        """
+        """
+        # loss = self.criterion(outputs, targets)
+        num_losses = outputs.size(0) * len(self.nodes) / 2.
+
+        outputs_subs = defaultdict(lambda: [])
+        targets_subs = defaultdict(lambda: [])
+        cams_subs_1 = defaultdict(lambda: [])
+        cams_subs_2 = defaultdict(lambda: [])
+        targets_ints = [int(target) for target in targets.cpu().long()]
+        for node in self.nodes:
+            if self.max_leaves_supervised > 0 and \
+                    node.num_leaves > self.max_leaves_supervised:
+                continue
+
+            if self.min_leaves_supervised > 0 and \
+                    node.num_leaves < self.min_leaves_supervised:
+                continue
+
+            _, outputs_sub, targets_sub = HardTreeSupLoss.inference(
+                node, outputs, targets_ints, self.weighted_average)
+
+            # compute gradcam
+            cams = {i: [] for i in range(node.num_classes)}
+            probs, ids = self.gcam.forward(outputs_sub)
+            output = F.softmax(outputs_sub)
+
+            for i in range(len(node.children)):
+                self.gcam.backward(ids=output[:, [i]].long())
+                regions = self.gcam.generate(target_layer='module.layer4')
+                masks = []
+                for j in range(len(outputs_sub)):
+                    # Grad-CAM
+                    mask = regions[j, 0]
+                    if targets_sub[j] == i:
+                        cams[1].append(mask.flatten())
+                        #cams[1].append(mask)
+                    else:
+                        cams[0].append(mask.flatten())
+                        #cams[0].append(mask)
+            if len(cams[0]) == 0 or len(cams[1]) == 0:
+                continue
+            heatmaps_1 = torch.stack(cams[0])
+            heatmaps_2 = torch.stack(cams[1])
+
+            key = node.num_classes
+            assert outputs_sub.size(0) == len(targets_sub)
+            outputs_subs[key].append(outputs_sub)
+            targets_subs[key].extend(targets_sub)
+            cams_subs_1[key].append(heatmaps_1)
+            cams_subs_2[key].append(heatmaps_2)
+
+        for key in outputs_subs:
+            outputs_sub = torch.cat(outputs_subs[key], dim=0)
+            targets_sub = torch.Tensor(targets_subs[key]).long().to(outputs_sub.device)
+            cams_sub_1 = torch.cat(cams_subs_1[key], dim=0)
+            cams_sub_2 = torch.cat(cams_subs_2[key], dim=0)
+            if not outputs_sub.size(0):
+                continue
+            fraction = outputs_sub.size(0) / float(num_losses) \
+                       * self.tree_supervision_weight
+            loss = self.mask_loss(cams_sub_1, cams_sub_2) * fraction
+            print("mask loss ", self.mask_loss(cams_sub_1, cams_sub_2) * fraction * .01)
+        return loss
+
+class SoftTreeSupMaskLoss(SoftTreeSupLoss):
+
+    def forward(self, outputs, targets):
+        fc, outputs = outputs
+        #loss = self.criterion(torch.mm(outputs, torch.transpose(fc, 0, 1)), targets)
+        loss = self.criterion(fc(outputs), targets)
+        bayesian_outputs = SoftTreeSupMaskLoss.inference(
+            self.nodes, (fc, outputs), self.num_classes, self.weighted_average, self.top_k)
+        loss += self.criterion(bayesian_outputs, targets) * self.tree_supervision_weight
+        return loss
+
+    @classmethod
+    def inference(cls, nodes, outputs, num_classes, weighted_average=False, top_k=0.5):
+        """
+        In theory, the loop over children below could be replaced with just a
+        few lines:
+            for index_child in range(len(node.children)):
+                old_indexes = node.new_to_old_classes[index_child]
+                class_probs[:,old_indexes] *= output[:,index_child][:,None]
+        However, we collect all indices first, so that only one tensor operation
+        is run.
+        """
+        fc, outputs = outputs
+        class_probs = torch.ones((outputs.size(0), num_classes)).to(outputs.device)
+        for node in nodes:
+            output = cls.get_output_sub(outputs, node, weighted_average, top_k, fc)
+            output = F.softmax(output)
+
+            old_indices, new_indices = [], []
+            for index_child in range(len(node.children)):
+                old = node.new_to_old_classes[index_child]
+                old_indices.extend(old)
+                new_indices.extend([index_child] * len(old))
+
+            assert len(set(old_indices)) == len(old_indices), (
+                'All old indices must be unique in order for this operation '
+                'to be correct.'
+            )
+            class_probs[:,old_indices] *= output[:,new_indices]
+        return class_probs
+
+
+    @staticmethod
+    def get_output_sub(_outputs, node, weighted_average, top_k, fc):
+        # here, outputs is the feature vector instead of pre-softmax fc outputs
+        # get attention mask that is already set
+        #attention_mask = node.attention_mask
+        # or, calculate attention mask here
+        classes_in_node = []
+        for i in node.new_to_old_classes:
+            classes_in_node.extend(node.new_to_old_classes[i])
+        classes_in_node_fc = fc.weight[classes_in_node]
+        classes_in_node_var = classes_in_node_fc.var(dim=0)
+        _, attention_mask = classes_in_node_var.sort()
+
+
+        old_indices, new_indices = [], []
+        for index_child in range(len(node.children)):
+            old = node.new_to_old_classes[index_child]
+            old_indices.extend(old)
+            new_indices.extend([index_child] * len(old))
+
+
+        attention_zero_mask = attention_mask[int(top_k*len(attention_mask)):]
+        attention_zero_mask = attention_zero_mask.reshape(1, -1).repeat((_outputs.size(0),1)).long()
+        _outputs = _outputs.clone()
+        _outputs.scatter_(1,attention_zero_mask,0.)
+        #_outputs = torch.mm(_outputs, torch.transpose(fc, 0, 1))
+        _outputs = fc(_outputs)
+
+        if weighted_average:
+            node.move_leaf_weights_to(_outputs.device)
+
+        weights = [
+            node.new_to_leaf_weights[new_label] if weighted_average else 1
+            for new_label in range(node.num_classes)
+        ]
+
+        cls_idxs = [node.new_to_old_classes[new_label] for new_label in range(node.num_classes)]
+
+        return torch.stack([
+            (_outputs * weight).T
+            [cls_idx].mean(dim=0)
+            for cls_idx, weight in zip(cls_idxs, weights)
+        ]).T

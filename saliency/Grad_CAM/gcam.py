@@ -156,7 +156,7 @@ class GradCAM(_BaseWrapper):
         return F.adaptive_avg_pool2d(grads, 1)
 
     def forward(self, image, node):
-        self.image_shape = image.shape[2:]
+        self.image_shape = image.shape[1:]
         return super(GradCAM, self).forward(image, node)
 
     def generate(self, target_layer):

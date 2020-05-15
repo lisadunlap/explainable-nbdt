@@ -188,7 +188,8 @@ class HardEmbeddedDecisionRules(Noop):
             self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
             self.class_totals[self.classes[targets[i]]] += 1
         accuracy = round(self.correct / float(self.total), 4) * 100
-        return f'NBDT-Hard: {accuracy}%'
+        # return f'NBDT-Hard: {accuracy}%'
+        return (predicted == targets).sum().item()
 
     def traverse_tree(self, _, wnid_to_pred_selector, n_samples):
         wnid_root = get_root(self.G)
