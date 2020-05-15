@@ -244,7 +244,8 @@ class SoftEmbeddedDecisionRules(HardEmbeddedDecisionRules):
             self.class_accuracies[self.classes[predicted[i]]] += int(predicted[i] == targets[i])
             self.class_totals[self.classes[targets[i]]] += 1
         accuracy = round(self.correct / float(self.total), 4) * 100
-        return f'NBDT-Soft: {accuracy}%'
+        #return f'NBDT-Soft: {accuracy}%'
+        return (predicted == targets).sum().item()
 
     def end_test(self, epoch):
         accuracy = round(self.correct / self.total * 100., 2)
@@ -856,7 +857,7 @@ class SingleGradCAM(SingleInference):
         for i in range(target_index):
             # Grad-CAM
             self.gcam.backward(ids=ids[:, [i]])
-            regions = self.gcam.generate(target_layer='module.layer3')
+            regions = self.gcam.generate(target_layer='module.layer4')
             masks = []
             for j in range(len(img)):
 

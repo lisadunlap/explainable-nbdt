@@ -4,9 +4,11 @@ import torch.nn.functional as F
 from collections import defaultdict
 from nbdt.data.custom import Node
 import numpy as np
-from nbdt.utils import Colors
+from nbdt.utils import Colors, MaskLoss
+from saliency.Grad_CAM.gcam_loss import GradCAM
 
-__all__ = names = ('HardTreeSupLoss', 'SoftTreeSupLoss', 'CrossEntropyLoss', 'HardTreeSupLossMultiPath')
+__all__ = names = ('HardTreeSupLoss', 'SoftTreeSupLoss', 'CrossEntropyLoss', 'HardTreeSupLossMultiPath',
+                   'AttentionLoss', 'HardAttentionLoss', 'SoftTreeSupMaskLoss')
 keys = (
     'path_graph', 'path_wnids', 'max_leaves_supervised',
     'min_leaves_supervised', 'weighted_average', 'tree_supervision_weight',
