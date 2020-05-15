@@ -28,7 +28,7 @@ def assert_all_wnids_in_graph(G, wnids):
 
 def main():
     parser = get_parser()
-
+    parser.add_argument('--path-extension', type=str, help='custom name for path')
     args = parser.parse_args()
     wnids = get_wnids_from_dataset(args.dataset, path_wnids_ood=args.ood_path_wnids)
     if args.dataset == 'MiniImagenet':
@@ -63,6 +63,8 @@ def main():
         assert_all_wnids_in_graph(G, wnids)
 
     path = get_graph_path_from_args(args)
+    if args.path_extension:
+        path = path.replace('.json', '-{}.json'.format(args.path_extension))
     write_graph(G, path)
 
     Colors.green('==> Wrote tree to {}'.format(path))

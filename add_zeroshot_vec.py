@@ -81,9 +81,9 @@ populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
 
 if args.dataset == 'MiniImagenet':
     trainset = dataset(**dataset_kwargs, root='./data',
-                       zeroshot=args.zeroshot_dataset, train=True, download=True, transform=transform_train)
+                       zeroshot=True, train=True, download=True, transform=transform_train)
     testset = dataset(**dataset_kwargs, root='./data',
-                      zeroshot=args.zeroshot_dataset, train=False, download=True, transform=transform_test)
+                      zeroshot=True, train=False, download=True, transform=transform_test)
 else:
     trainset = dataset(**dataset_kwargs, root='./data', train=True, download=True, transform=transform_train)
     testset = dataset(**dataset_kwargs, root='./data', train=False, download=True, transform=transform_test)
@@ -128,7 +128,8 @@ if device == 'cuda':
 
 net = net.to(device)
 
-checkpoint_fname = args.checkpoint_fname
+checkpoint_fname = args.checkpoint_fname or \
+                   '{}-placeholder-{}'.format(args.path_resume.replace('.pth','').replace('./checkpoint/',''), args.num_samples)
 resume_path = args.path_resume or './checkpoint/{}.pth'.format(checkpoint_fname)
 if args.resume:
     # Load checkpoint.
@@ -179,7 +180,7 @@ if args.word2vec:
 
 num_samples = 0
 with torch.no_grad():
-    for i, (inputs, labels) in enumerate(trainloader):
+    for i, (inputs, labels) in enumerate(testloader):
         if args.dataset in ("AnimalsWithAttributes2"):
             inputs, predicates = inputs
         net(inputs)
