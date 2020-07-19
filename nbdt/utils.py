@@ -168,6 +168,17 @@ def get_transform_from_name(dataset_name, dataset, input_size):
         input_size = input_size or default_input_size
         transform_train = dataset.transform_train(input_size)
         transform_test = dataset.transform_val(input_size)
+        # transform_train = transforms.Compose([
+        #     transforms.Resize(84),
+        #     transforms.RandomCrop(84, padding=8),
+        #     transforms.RandomHorizontalFlip(),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        # ])
+        # transform_test = transforms.Compose([
+        #     transforms.ToTensor(),
+        #     transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        # ])
 
     if dataset_name in ('MiniPlaces', 'AnimalsWithAttributes2'):
         transform_train = dataset.transform_train()
@@ -492,5 +503,71 @@ class MaskLoss(nn.Module):
         A = torch.min(input, target)
         values, index = torch.max(target, 0)
         B = 1/(1+torch.exp(-100*(target-.55*values)))
-        return torch.mean(2*torch.div(torch.sum(torch.bmm(A.view(N, 1, W), B.view(N, W, 1)).view(N), dim=-1),
-                           torch.sum(input+target, axis=-1)), dim=-1)
+        sums = []
+        for n in range(N):
+            value = values[n]
+            idx = index[n]
+            tar = target[n]
+            inp = input[n]
+            a = torch.min(inp, tar)
+            b = 1/(1+torch.exp(-100*(tar-.55*value)))
+            sums.append(2*torch.div(torch.dot(a,b), torch.sum(inp+target, axis=-1)))
+        sums = torch.stack(sums)
+        sums[torch.isnan(sums)] = 0.0
+        # return torch.mean(2*torch.div(torch.bmm(A.view(N, 1, W), B.view(N, W, 1)).view(1, N),
+        #                    torch.sum(input+target, axis=-1)), dim=-1)
+        return sums.mean()
+
+def replicate(inputs, labels):
+    """
+     inputs: torch Tensor size Bx(anything)
+     labels: torch tensor size Bx(num_classes)
+             (multilabel, where labels[i,j] is 1 if image i has class j, 0 otherwise)
+     Return:
+     rep_inputs size Kx(anything), where K is the number of 1's that appeared in all labels
+     rep_labels size Kx1, where rep_labels[i] is a class number that appeared in images[i]
+     Example:
+         inputs = torch.zeros((2,3))
+         labels = torch.Tensor([
+             [0,1,1,0],
+             [0,1,0,0]
+         ])
+         rep_inputs, rep_labels = replicate(inputs, labels)
+        assert rep_inputs.shape == (3,3)
+        assert torch.all(rep_labels == torch.Tensor([1,2,1]))
+    """
+    input_dim = len(inputs.shape)
+    rep_inputs, rep_labels = None, None
+    for (sample, label) in zip(inputs,labels):
+        if rep_inputs is None:
+            rep_labels = torch.where(label == 1.)[0]
+            rep_inputs = sample.unsqueeze(0).repeat(len(rep_labels),*([1] * (input_dim-1)))
+        else:
+            new_rep_labels = torch.where(label == 1.)[0]
+            new_reps = sample.unsqueeze(0).repeat(len(new_rep_labels),*([1] * (input_dim-1)))
+            rep_labels = torch.cat((rep_labels, new_rep_labels))
+            rep_inputs = torch.cat((rep_inputs, new_reps))
+    return rep_inputs, rep_labels
+
+def replicate_outputs(inputs, num_replicate):
+    """
+     inputs: torch Tensor size Bx(anything)
+     labels: torch tensor size Bx(num_classes)
+             (multilabel, where labels[i,j] is 1 if image i has class j, 0 otherwise)
+     Return:
+     rep_inputs size Kx(anything), where K is the number of 1's that appeared in all labels
+     rep_labels size Kx1, where rep_labels[i] is a class number that appeared in images[i]
+     Example:
+         inputs = torch.zeros((2,3))
+         labels = torch.Tensor([
+             [0,1,1,0],
+             [0,1,0,0]
+         ])
+         rep_inputs, rep_labels = replicate(inputs, labels)
+        assert rep_inputs.shape == (3,3)
+        assert torch.all(rep_labels == torch.Tensor([1,2,1]))
+    """
+    ret = {i:None for i in range(num_replicate)}
+    for i in range(num_replicate):
+        ret[i] = inputs.clone()
+    return ret

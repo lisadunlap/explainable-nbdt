@@ -58,7 +58,7 @@ class Noop:
         self.testset = testset
         self.use_wandb = use_wandb
         if self.use_wandb:
-            wandb.init(project=experiment_name, name=run_name, reinit=True)
+            wandb.init(project=experiment_name, name=run_name, reinit=True, entity='lisadunlap')
 
         self.epoch = None
 
@@ -172,7 +172,7 @@ class HardEmbeddedDecisionRules(Noop):
         wnid_to_pred_selector = {}
         for node in self.nodes:
             selector, outputs_sub, targets_sub = HardTreeSupLoss.inference(
-                node, outputs, targets, self.weighted_average, self.ignore_labels)
+                node, outputs, targets, self.weighted_average)
             if not any(selector):
                 continue
             _, preds_sub = torch.max(outputs_sub, dim=1)
@@ -218,11 +218,11 @@ class HardEmbeddedDecisionRules(Noop):
         super().end_test(epoch)
         accuracy = round(self.correct / self.total * 100., 2)
         print(f'NBDT-Hard Accuracy: {accuracy}%, {self.correct}/{self.total}')
-        print([(self.class_accuracies[k]/self.class_totals[k])*100 for k in self.class_accuracies.keys()])
-        if self.use_wandb:
-            wandb.run.summary["NBDT hard accuracy"] = accuracy
-            data = [[(self.class_accuracies[k]/self.class_totals[k])*100 for k in self.class_accuracies.keys()]]
-            wandb.log({"class accuracies": wandb.Table(data=data, columns=self.classes)})
+        # print([(self.class_accuracies[k]/self.class_totals[k])*100 for k in self.class_accuracies.keys()])
+        # if self.use_wandb:
+        #     wandb.run.summary["NBDT hard accuracy"] = accuracy
+        #     data = [[(self.class_accuracies[k]/self.class_totals[k])*100 for k in self.class_accuracies.keys()]]
+        #     wandb.log({"class accuracies": wandb.Table(data=data, columns=self.classes)})
 
 
 class SoftEmbeddedDecisionRules(HardEmbeddedDecisionRules):
@@ -507,6 +507,8 @@ class HardTrackNodes(HardFullTreePrior):
 
                 G = nx.DiGraph(self.G)
                 for node in self.G.nodes():
+                    if self.class_counts[cls] == 0:
+                        print(cls)
                     G.nodes[node]['weight'] = self.node_counts[cls][node] / self.class_counts[cls]
                 G.nodes[get_root(self.G)]['weight'] = 1
 
@@ -712,6 +714,8 @@ class SoftFullTreeOODPrior(SoftFullTreePrior):
                 pass
             G = nx.DiGraph(self.G)
             for node in self.G.nodes():
+                if self.class_counts[cls] == 0:
+                    print(cls)
                 G.nodes[node]['weight'] = self.node_counts[cls][node] / self.class_counts[cls]
             G.nodes[get_root(self.G)]['weight'] = 1
             json_data = node_link_data(G)
@@ -822,6 +826,7 @@ class SingleGradCAM(SingleInference):
                 print("Generating GradCAM for ", node.wnid)
 
                 rise_saliency = self.gen_gcam(img, node)
+                rise_saliency = self.get_mask(rise_saliency)
                 wnid_to_rise[node.wnid] = rise_saliency
         if self.use_wandb:
             print("log image")
@@ -834,7 +839,6 @@ class SingleGradCAM(SingleInference):
 
         for wnid, rise_output in wnid_to_rise.items():
             overlay = get_cam(torch.squeeze(img), rise_output)
-            #sals.append(wandb.Image(overlay, caption=f"GradCAM (wnid={wnid}, idx={predicted.index(wnid)})"))
             if wnid in predicted:
                 sals.append(wandb.Image(overlay, caption=f"GradCAM (idx={predicted.index(wnid)})"))
             else:
@@ -869,3 +873,8 @@ class SingleGradCAM(SingleInference):
             return masks[0]
         self.gcam.remove_hook()
         return masks
+
+    def get_mask(self, mask, sigma=.55, omega=100):
+        sigma *= np.max(mask)
+        mask = 1/(1+np.exp(-omega*(mask - sigma)))
+        return mask

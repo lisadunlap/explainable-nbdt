@@ -16,6 +16,7 @@ from .efficientnet import *
 from .linear import *
 from .wideresnet import *
 from pytorchcv.models.wrn_cifar import *
+from pytorchcv.models.resnet import resnet12
 from pytorchcv.models.efficientnet import *
 from torchvision.models.resnet import *
 

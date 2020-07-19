@@ -93,7 +93,7 @@ dataset_kwargs = {}
 populate_kwargs(args, dataset_kwargs, dataset, name=f'Dataset {args.dataset}',
     keys=data.custom.keys, globals=globals())
 
-if args.dataset == 'MiniImagenet':
+if args.dataset == 'MiniImagenet' or args.dataset == 'MiniImagenetIncludeLabels':
     trainset = dataset(**dataset_kwargs, root='./data',
                        zeroshot=args.zeroshot_dataset, train=True, download=True,
                        drop_classes=args.drop_classes)
@@ -141,6 +141,9 @@ if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
+for name, module in net.module._modules.items():
+    print(name)
+
 checkpoint_fname = args.checkpoint_fname or generate_fname(**vars(args))
 resume_path = args.path_resume or './checkpoint/{}.pth'.format(checkpoint_fname)
 if args.resume:
@@ -179,13 +182,23 @@ if args.normalize:
 if args.word2vec:
     net = word2vec_model(net, trainset, exclude_classes=args.exclude_classes, dataset_name=args.dataset,
                          pretrained=args.pretrained)
-
-
 loss_kwargs = {}
 class_criterion = getattr(loss, args.loss)
 populate_kwargs(args, loss_kwargs, class_criterion, name=f'Loss {args.loss}',
     keys=loss.keys, globals=globals())
 criterion = class_criterion(**loss_kwargs)
+
+keys = ['fc', 'linear']
+for key in keys:
+    fc = getattr(net.module, key, None)
+    if fc is not None:
+        break
+
+if args.freeze_conv:
+    for param in net.parameters():
+        param.requires_grad = False
+    for param in fc.parameters():
+        param.requires_grad = True
 
 optimizer = optim.SGD(filter(lambda p: p.requires_grad, net.parameters()), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
 

@@ -217,7 +217,10 @@ class Node:
     @staticmethod
     def get_wnid_to_node(path_graph, path_wnids, classes, path_wnids_ood=None):
         wnid_to_node = {}
-        G = read_graph(path_graph)
+        try:
+            G = read_graph(path_graph)
+        except:
+            G = path_graph
         for wnid in get_non_leaves(G):
             wnid_to_node[wnid] = Node(
                 wnid, classes, path_graph=path_graph, path_wnids=path_wnids, path_wnids_ood=path_wnids_ood)
@@ -233,7 +236,10 @@ class Node:
     @staticmethod
     def get_root_node_wnid(path_graph):
         raise UserWarning('Root node may have wnid now')
-        tree = ET.parse(path_graph)
+        try:
+            tree = ET.parse(path_graph)
+        except:
+            tree = path_graph
         for node in tree.iter():
             wnid = node.get('wnid')
             if wnid is not None:
