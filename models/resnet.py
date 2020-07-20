@@ -11,7 +11,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import torch
-from embedding_propagation import EmbeddingPropagation
 
 
 __all__ = ('ResNet10', 'ResNet12', 'ResNet18', 'ResNet34', 'ResNet50', 'ResNet101', 'ResNet152')
