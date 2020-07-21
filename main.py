@@ -141,7 +141,7 @@ if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
-for name, module in net.module._modules.items():
+for name, module in net._modules.items():
     print(name)
 
 checkpoint_fname = args.checkpoint_fname or generate_fname(**vars(args))
@@ -190,7 +190,10 @@ criterion = class_criterion(**loss_kwargs)
 
 keys = ['fc', 'linear']
 for key in keys:
-    fc = getattr(net.module, key, None)
+    try:
+        fc = getattr(net, key, None)
+    except Exception as e:
+        fc = getattr(net.module, key, None)
     if fc is not None:
         break
 

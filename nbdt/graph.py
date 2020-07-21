@@ -32,6 +32,9 @@ def get_parser():
         '--single-path',
         action='store_true',
         help='Ensure every leaf only has one path from the root.')
+    parser.add_argument('--arch', type=str, default='ResNet18',
+        help='(induced hierarchy) Model name to get pretrained fc weights for.',
+        choices=list(models.get_model_choices()))
     parser.add_argument('--no-prune', action='store_true', help='Do not prune.')
     parser.add_argument('--fname', type=str,
         help='Override all settings and just provide a path to a graph')

@@ -389,10 +389,14 @@ def word2vec_model(net, trainset, dataset_name='CIFAR10', exclude_classes=None, 
     the backward call"""
 
     print('==> Adding in word2vec embeddings...')
-    if pretrained:
-        layer = net.module.fc
+    if isinstance(net, nn.DataParallel):
+        module = net.module
     else:
-        layer = net.module.linear
+        module = net
+    if pretrained:
+        layer = module.fc
+    else:
+        layer = module.linear
     word2vec_path = os.path.join(os.path.join('./data',DATASET_TO_FOLDER_NAME[dataset_name]), "word2vec/")
     if not os.path.exists(word2vec_path):
         raise Exception("No saved word2vec embeddings, run generate_word2vec.py")
@@ -401,8 +405,11 @@ def word2vec_model(net, trainset, dataset_name='CIFAR10', exclude_classes=None, 
     for i, cls in enumerate(trainset.classes):
         word_vec = np.load(word2vec_path+cls+'.npy')
         word_vec /= LA.norm(word_vec)
+        print(word_vec.shape, len(fc_weights))
         fc_weights = np.append(fc_weights, word_vec)
-    fc_weights = fc_weights.reshape((len(trainset.classes), 512))
+        print(fc_weights.shape)
+    print(trainset.classes, fc_weights.shape)
+    fc_weights = fc_weights.reshape((len(trainset.classes), int(fc_weights.shape[0]/len(trainset.classes))))
     layer = nn.Linear(fc_weights.shape[1], len(trainset.classes)).to("cuda")
     layer.weight = nn.Parameter(torch.from_numpy(fc_weights).float().to("cuda"))
     # Colors.cyan("All word2vec checks passed!")
