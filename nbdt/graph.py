@@ -384,8 +384,17 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
 
         # find center in tree that most closely matches
         label_vec = centers_all[label]
-        _, closest = torch.max(torch.matmul(centers,label_vec), dim=0)
-        closest = int(closest.cpu().numpy())
+        ## smallest euclidean distance
+        # dist = [np.linalg.norm(centers[i]-label_vec.numpy()) for i in range(centers.shape[0])]
+        # closest = np.argmin(dist)
+        
+        # largest dot product
+        prods = [np.matmul(centers[i],label_vec.numpy()) for i in range(centers.shape[0])]
+        closest = np.argmax(prods)
+        
+        print(closest, label)
+        # _, closest = torch.max(torch.matmul(centers,label_vec), dim=0)
+        # closest = int(closest.cpu().numpy())
         
         wnid = center_to_wnid[closest]
 
