@@ -49,11 +49,18 @@ def main():
     elif args.method == 'self-induced':
         G = build_self_induced_graph(wnids,
             checkpoint=args.induced_checkpoint,
+<<<<<<< HEAD
             ignore_labels=args.ignore_labels,
             drop_classes=args.drop_classes,
             metric=args.metric,
             method=args.weights,
             policy=args.policy)
+=======
+            linkage=args.induced_linkage,
+            affinity=args.induced_affinity,
+            branching_factor=args.branching_factor,
+            ignore_labels=args.ignore_labels)
+>>>>>>> 035d44fc203a1955d3ed9b9a142c365994d7c766
     else:
         raise NotImplementedError(f'Method "{args.method}" not yet handled.')
     print_graph_stats(G, 'matched', args)
