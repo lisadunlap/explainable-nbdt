@@ -11,7 +11,7 @@ import torch
 import argparse
 import os
 from numpy import linalg as LA
-
+from induce import *
 
 def get_parser():
     import models
@@ -64,6 +64,11 @@ def get_parser():
     parser.add_argument("--include-classes", nargs='*', type=str, help='classes to include')
     parser.add_argument('--ood-path-wnids', type=str, help='path to wnids.txt for ood-dataset')
     parser.add_argument('--drop-classes', action='store_true')
+
+    parser.add_argument('--metric', type=str, default='naive', help='distance metric used for self-induced hierarchy')
+    parser.add_argument('--policy', type=str, default='wait', help='policy used for self-induction')
+    parser.add_argument('--weights', type=str, default='average', 
+                        help='method used in self-induction for computing the weights of intermediate nodes')
     return parser
 
 
@@ -411,6 +416,70 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
     return G
 
 
+def build_self_induced_graph(wnids, checkpoint, ignore_labels=[], drop_classes=False, metric='naive', method='average', policy='wait', verbose=0):
+    #metric = getattr(induce, metric)
+    if metric == 'naive':
+        metric = naive
+
+    centers_all, bias_all = get_weight_bias(checkpoint)
+    
+    center_to_wnid = {}
+    for i, wnid in enumerate(wnids):
+        center_to_wnid[i] = wnid
+
+    wnids_all = wnids
+    use_labels = [label for label in range(centers_all.size(0)) if label not in ignore_labels]
+    wnids = [wnid for label, wnid in enumerate(wnids) if label not in ignore_labels]
+    centers = centers_all[use_labels,:]
+    bias = bias_all[use_labels]
+
+    classes = [wnid_to_name(wnid) for wnid in wnids]
+    G, nodes = build_full(centers, bias, metric, classes=classes, wnids=wnids, method=method, policy=policy, verbose=verbose)
+
+    # convert to graph of wnids 
+    G = build_Gw_from_Gn(G)
+    
+    # TODO: revisit this, build_full is not dropping ignored labels
+    if drop_classes:   # if we want to visualize the hierarchy without the zs classes
+        return G
+
+    # add originally ignored labels
+    
+    for label in ignore_labels:
+        wnid_new = wnids_all[label]
+        G.add_node(wnid_new)
+        set_node_label(G, wnid_to_synset(wnid_new))
+
+        # find center in tree that most closely matches
+        label_vec = centers_all[label]
+        # smallest euclidean distance
+        dist = [np.linalg.norm(centers[i]-label_vec.numpy()) for i in range(centers.shape[0])]
+        closest = np.argmin(dist)
+        
+        # # largest dot product
+        # prods = [np.matmul(centers[i],label_vec.numpy()) for i in range(centers.shape[0])]
+        # closest = np.argmax(prods)
+        
+        print(closest, label)
+        # _, closest = torch.max(torch.matmul(centers,label_vec), dim=0)
+        # closest = int(closest.cpu().numpy())
+        
+        wnid = center_to_wnid[closest]
+
+        parent = FakeSynset.create_from_offset(len(G.nodes))
+        G.add_node(parent.wnid)
+
+        in_node = list(G.in_edges(wnid))[0][0]
+        G.remove_edge(in_node, wnid)
+        G.add_edge(in_node, parent.wnid)
+        G.add_edge(parent.wnid, wnid)
+        G.add_edge(parent.wnid, wnid_new)
+
+    assert len(list(get_roots(G))) == 1, list(get_roots(G))
+    return G
+
+
+
 def build_induced_attribute_graph(dataset, checkpoint, linkage='ward', affinity='euclidean',
         branching_factor=2, ignore_labels=[]):
     centers = get_centers(checkpoint)
@@ -454,6 +523,28 @@ def build_induced_attribute_graph(dataset, checkpoint, linkage='ward', affinity=
 
     assert len(list(get_roots(G))) == 1, list(get_roots(G))
     return G
+
+
+def get_weight_bias(checkpoint):
+    data = torch.load(checkpoint, map_location=torch.device('cpu'))
+    try:
+        net = data['net']
+    except:
+        net = data
+
+
+    keys = ('fc.weight', 'linear.weight', 'module.linear.weight',
+            'module.net.linear.weight', 'output.weight', 'module.output.weight',
+            'output.fc.weight', 'module.output.fc.weight', 'module.fc.weight')
+    weight, bias = None, None
+    for key in keys:
+        if key in net:
+            weight = net[key].detach()
+            bias = net[key[:-6]+'bias'].detach()
+            break
+    assert weight is not None and bias is not None, (
+        f'Could not find FC weights or biases in {checkpoint} with keys: {net.keys()}')
+    return weight, bias
 
 
 def get_centers(checkpoint):
@@ -585,6 +676,37 @@ def get_common_hypernyms(synsets):
     for synset in synsets[2:]:
         common_hypernyms &= set(synsets[0].common_hypernyms(synset))
     return common_hypernyms
+
+
+##########
+# SYNSET #
+##########
+
+
+def synset_to_wnid(synset):
+    return f'{synset.pos()}{synset.offset():08d}'
+
+
+def wnid_to_synset(wnid):
+    from nltk.corpus import wordnet as wn  # entire script should not depend on wn
+
+    offset = int(wnid[1:])
+    pos = wnid[0]
+
+    try:
+        return wn.synset_from_pos_and_offset(wnid[0], offset)
+    except:
+        return FakeSynset(wnid)
+
+
+def wnid_to_name(wnid):
+    return synset_to_name(wnid_to_synset(wnid))
+
+
+def synset_to_name(synset):
+    return synset.name().split('.')[0]
+
+
 
 
 def deepest_synset(synsets):

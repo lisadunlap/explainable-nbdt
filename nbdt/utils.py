@@ -19,9 +19,9 @@ from gensim.models import Word2Vec
 from pathlib import Path
 
 # tree-generation consntants
-METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'clustered', 'extra_paths', 'weighted',
+METHODS = ('prune', 'wordnet', 'random', 'image', 'induced', 'self-induced', 'clustered', 'extra_paths', 'weighted',
            'replace_node', 'insert_node', 'induced-attributes', 'prettify')
-DATASETS = ('CIFAR10', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000',
+DATASETS = ('CIFAR10', 'CIFAR10IncludeClasses', 'CIFAR100', 'TinyImagenet200', 'TinyImagenet200IncludeClasses', 'Imagenet1000',
             'TinyImagenet200CombineClasses', 'MiniPlaces', 'AnimalsWithAttributes2', 'CUB2011', 'MiniImagenet')
 
 DATASET_TO_FOLDER_NAME = {
