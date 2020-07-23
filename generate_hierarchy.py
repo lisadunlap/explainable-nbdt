@@ -4,7 +4,7 @@ from nbdt.utils import DATASETS, METHODS, DATASET_TO_FOLDER_NAME
 from nbdt.graph import build_minimal_wordnet_graph, build_random_graph, \
     prune_single_successor_nodes, write_graph, get_wnids, generate_fname, \
     get_parser, get_wnids_from_dataset, get_directory, get_graph_path_from_args, \
-    augment_graph, get_depth, build_induced_graph
+    augment_graph, get_depth, build_induced_graph, build_self_induced_graph
 from nbdt.utils import Colors
 import xml.etree.ElementTree as ET
 import argparse
@@ -41,6 +41,13 @@ def main():
         G = build_random_graph(wnids, seed=args.seed, branching_factor=args.branching_factor)
     elif args.method == 'induced':
         G = build_induced_graph(wnids,
+            checkpoint=args.induced_checkpoint,
+            linkage=args.induced_linkage,
+            affinity=args.induced_affinity,
+            branching_factor=args.branching_factor,
+            ignore_labels=args.ignore_labels)
+    elif args.method == 'self-induced':
+        G = build_self_induced_graph(wnids,
             checkpoint=args.induced_checkpoint,
             linkage=args.induced_linkage,
             affinity=args.induced_affinity,
