@@ -8,15 +8,32 @@ Per the pipeline illustration above, we (1) [generate the hierarchy](https://git
 
 # Getting Started
 The pipeline for few shot learning is thus: 
-1. Train model: ```python main.py --model ResNet12 --dataset CIFAR10ExcludeClasses --exclude-classes cat --checkpoint-fname ckpt-CIFAR10-exclude-cat```
-2. Induce Hierarchy" ```python generate_hierarchy.py --method induced --dataset CIFAR10 --ignore-labels 3 --induced-checkpoint ./checkpoint/ckpt-CIFAR10-exclude-cat.pth```
-3. Finetune with NBDT (`--freeze-conv` is optional): ```python main.py --model ResNet12 --dataset CIFAR10ExcludeClasses --exclude-classes cat --resume --path-resume ./checkpoint/ckpt-CIFAR10-exclude-cat.pth --loss SoftTreeSupLoss --path-graph [JSON FILE OF HIERARCHY] --freeze-conv --analysis SoftEmbeddedDecisionRules```
-4. Add zershot vector (use `--replace` if replacing a row): ```python add_zeroshot_vec.py --model ResNet12 --resume --path-resume ./checkpoint/ckpt-CIFAR10-exclude-cat.pth --new-classes cat --num-samples 5 --checkpoint-fname ckpt-CIFAR10-exclude-cat-weighted```
-5. Reform Hierarchy: ```python generate_hierarchy.py --method induced --dataset CIFAR10 --ignore-labels 3 --induced-checkpoint ./checkpoint/ckpt-CIFAR10-exclude-cat-weighted.pth```
-6. Evaluate: ```python main.py --model ResNet12 --dataset CIFAR10 --resume --eval --path-resume ./checkpoint/ckpt-CIFAR10-exclude-cat-weighted.pth --path-graph [JSON FILE OF HIERARCHY] --analysis SoftEmbeddedDecisionRules```
+1. Train model: 
 
+```
+python main.py --model ResNet12 --dataset CIFAR10ExcludeClasses --exclude-classes cat --checkpoint-fname ckpt-CIFAR10-exclude-cat
+```
+2. Induce Hierarchy:
+ ```
+ python generate_hierarchy.py --method induced --dataset CIFAR10 --ignore-labels 3 --induced-checkpoint ./checkpoint/ckpt-CIFAR10-exclude-cat.pth
+ ```
+3. Finetune with NBDT (`--freeze-conv` is optional): 
+```
+python main.py --model ResNet12 --dataset CIFAR10ExcludeClasses --exclude-classes cat --resume --path-resume ./checkpoint/ckpt-CIFAR10-exclude-cat.pth --loss SoftTreeSupLoss --path-graph [JSON FILE OF HIERARCHY] --freeze-conv --analysis SoftEmbeddedDecisionRules
+```
+4. Add zershot vector (use `--replace` if replacing a row): 
+```
+python add_zeroshot_vec.py --model ResNet12 --resume --path-resume ./checkpoint/ckpt-CIFAR10-exclude-cat.pth --new-classes cat --num-samples 5 --checkpoint-fname ckpt-CIFAR10-exclude-cat-weighted
+```
+5. Reform Hierarchy: 
+```
+python generate_hierarchy.py --method induced --dataset CIFAR10 --ignore-labels 3 --induced-checkpoint ./checkpoint/ckpt-CIFAR10-exclude-cat-weighted.pth
+```
+6. Evaluate: 
+```
+python main.py --model ResNet12 --dataset CIFAR10 --resume --eval --path-resume ./checkpoint/ckpt-CIFAR10-exclude-cat-weighted.pth --path-graph [JSON FILE OF HIERARCHY] --analysis SoftEmbeddedDecisionRules
+```
 
-The bash scripts above are explained in more detail in [Induced Hierarchy](https://github.com/alvinwan/neural-backed-decision-trees#Induced-Hierarchy), [Soft Tree Supervision Loss](https://github.com/alvinwan/neural-backed-decision-trees#Tree-Supervision-Loss), and [Soft Inference](https://github.com/alvinwan/neural-backed-decision-trees#Soft-Inference).
 
 # 1. Hierarchies
 
