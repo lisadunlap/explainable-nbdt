@@ -75,7 +75,7 @@ experiment_name = args.experiment_name if args.experiment_name \
     else '{}-{}-{}-{}'.format(args.model, args.dataset, args.loss, args.analysis)
 
 if args.wandb:
-    wandb.init(project=experiment_name, name='main', entity='lisadunlap')
+    wandb.init(project=experiment_name, name='main')
     wandb.config.update({
         k: v for k, v in vars(args).items() if (isinstance(v, str) or isinstance(v, int) or isinstance(v, float))
     })
@@ -126,7 +126,7 @@ if args.pretrained:
             for param in net.parameters():
                 param.requires_grad = False
             net.fc.requires_grad = True
-        if int(args.model[6:]) <= 34:
+        if int(args.model[-1:]) <= 34:
             net.fc = nn.Linear(512, model_kwargs['num_classes'])
         else:
             net.fc = nn.Linear(512*4, model_kwargs['num_classes'])
@@ -141,7 +141,7 @@ if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
-for name, module in net.module._modules.items():
+for name, module in net._modules.items():
     print(name)
 
 checkpoint_fname = args.checkpoint_fname or generate_fname(**vars(args))
@@ -190,7 +190,10 @@ criterion = class_criterion(**loss_kwargs)
 
 keys = ['fc', 'linear']
 for key in keys:
-    fc = getattr(net.module, key, None)
+    try:
+        fc = getattr(net, key, None)
+    except Exception as e:
+        fc = getattr(net.module, key, None)
     if fc is not None:
         break
 

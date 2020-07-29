@@ -4,11 +4,12 @@ from nbdt.utils import DATASETS, METHODS, DATASET_TO_FOLDER_NAME
 from nbdt.graph import build_minimal_wordnet_graph, build_random_graph, \
     prune_single_successor_nodes, write_graph, get_wnids, generate_fname, \
     get_parser, get_wnids_from_dataset, get_directory, get_graph_path_from_args, \
-    augment_graph, get_depth, build_induced_graph
+    augment_graph, get_depth, build_induced_graph, build_self_induced_graph
 from nbdt.utils import Colors
 import xml.etree.ElementTree as ET
 import argparse
 import os
+from nbdt import data
 
 
 def print_graph_stats(G, name, args):
@@ -29,8 +30,11 @@ def assert_all_wnids_in_graph(G, wnids):
 def main():
     parser = get_parser()
     parser.add_argument('--path-extension', type=str, help='custom name for path')
+    parser.add_argument('--exclude-labels',  nargs="*", type=int, help="labels of classes to exclude from the hierarchy")
     args = parser.parse_args()
     wnids = get_wnids_from_dataset(args.dataset, path_wnids_ood=args.ood_path_wnids)
+    wnids = [wnid for label, wnid in enumerate(wnids) if label not in args.exclude_labels]
+    print(wnids)
     if args.dataset == 'MiniImagenet':
         if args.drop_classes:
             wnids=wnids[:64]
@@ -46,6 +50,14 @@ def main():
             affinity=args.induced_affinity,
             branching_factor=args.branching_factor,
             ignore_labels=args.ignore_labels)
+    elif args.method == 'self-induced':
+        G = build_self_induced_graph(wnids,
+            checkpoint=args.induced_checkpoint,
+            ignore_labels=args.ignore_labels,
+            drop_classes=args.drop_classes,
+            metric=args.metric,
+            method=args.weights,
+            policy=args.policy)
     else:
         raise NotImplementedError(f'Method "{args.method}" not yet handled.')
     print_graph_stats(G, 'matched', args)

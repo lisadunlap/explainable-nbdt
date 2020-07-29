@@ -178,6 +178,8 @@ net.eval()
 if args.word2vec:
     word2vec_path = os.path.join(os.path.join(trainset.root, DATASET_TO_FOLDER_NAME[args.dataset]), "word2vec/")
 
+projection_matrix = np.load('data/projection.npy')
+
 num_samples = 0
 with torch.no_grad():
     for i, (inputs, labels) in enumerate(testloader):
@@ -193,7 +195,7 @@ with torch.no_grad():
             cls_name = trainset.classes[label]
             if cls_name in cls_to_vec and len(cls_to_vec[cls_name]) < args.num_samples:
                 if args.word2vec:
-                    word_vec = get_saved_word2vec(word2vec_path + cls_name + '.npy', args.dimension)
+                    word_vec = get_saved_word2vec(word2vec_path + cls_name + '.npy', args.dimension, projection_matrix)
                     cls_to_vec[cls_name] = word_vec
                 else:
                     cls_to_vec[cls_name].append(vec)
