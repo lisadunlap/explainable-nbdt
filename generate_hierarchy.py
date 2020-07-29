@@ -30,7 +30,7 @@ def assert_all_wnids_in_graph(G, wnids):
 def main():
     parser = get_parser()
     parser.add_argument('--path-extension', type=str, help='custom name for path')
-    parser.add_argument('--exclude-labels',  nargs="*", type=int, help="labels of classes to exclude from the hierarchy")
+    parser.add_argument('--exclude-labels',  nargs="*", type=int, default=[], help="labels of classes to exclude from the hierarchy")
     args = parser.parse_args()
     wnids = get_wnids_from_dataset(args.dataset, path_wnids_ood=args.ood_path_wnids)
     wnids = [wnid for label, wnid in enumerate(wnids) if label not in args.exclude_labels]

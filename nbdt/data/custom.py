@@ -572,7 +572,7 @@ class ExcludeLabelsDataset(IncludeLabelsDataset):
     accepts_include_labels = False
     accepts_exclude_labels = True
 
-    def __init__(self, dataset, exclude_labels=(0,), drop_classes=False):
+    def __init__(self, dataset, exclude_labels=(0,), drop_classes=True):
         k = len(dataset.classes)
         include_labels = list(set(range(k)) - set(exclude_labels))
         super().__init__(
