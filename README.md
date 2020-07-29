@@ -1,4 +1,4 @@
-# Neural-Backed Decision Trees
+# Neural-Backed Decision Trees for Few-Shot Learning
 
 Run a decision tree that achieves accuracy within 1% of a recently state-of-the-art (WideResNet) neural network's accuracy on CIFAR10 and CIFAR100 and within 1.5% on TinyImagenet200.
 
@@ -7,46 +7,14 @@ Run a decision tree that achieves accuracy within 1% of a recently state-of-the-
 Per the pipeline illustration above, we (1) [generate the hierarchy](https://github.com/alvinwan/neural-backed-decision-trees#1-Hierarchies) and (2) train the neural network [with a tree supervision loss](https://github.com/alvinwan/neural-backed-decision-trees#2-Tree-Supervision-Loss). Then, we (3) [run inference](https://github.com/alvinwan/neural-backed-decision-trees#3-Inference) by featurizing images using the network backbone and running embedded decision rules.
 
 # Getting Started
+The pipeline for few shot learning is thus: 
+1. Train model: ```python main.py --model ResNet12 --dataset CIFAR10ExcludeClasses --exclude-classes cat --checkpoint-fname ckpt-CIFAR10-exclude-cat```
+2. Induce Hierarchy" ```python generate_hierarchy.py --method induced --dataset CIFAR10 --ignore-labels 3 --induced-checkpoint ./checkpoint/ckpt-CIFAR10-exclude-cat.pth```
+3. Finetune with NBDT (`--freeze-conv` is optional): ```python main.py --model ResNet12 --dataset CIFAR10ExcludeClasses --exclude-classes cat --resume --path-resume ./checkpoint/ckpt-CIFAR10-exclude-cat.pth --loss SoftTreeSupLoss --path-graph [JSON FILE OF HIERARCHY] --freeze-conv --analysis SoftEmbeddedDecisionRules```
+4. Add zershot vector (use `--replace` if replacing a row): ```python add_zeroshot_vec.py --model ResNet12 --resume --path-resume ./checkpoint/ckpt-CIFAR10-exclude-cat.pth --new-classes cat --num-samples 5 --checkpoint-fname ckpt-CIFAR10-exclude-cat-weighted```
+5. Reform Hierarchy: ```python generate_hierarchy.py --method induced --dataset CIFAR10 --ignore-labels 3 --induced-checkpoint ./checkpoint/ckpt-CIFAR10-exclude-cat-weighted.pth```
+6. Evaluate: ```python main.py --model ResNet12 --dataset CIFAR10 --resume --eval --path-resume ./checkpoint/ckpt-CIFAR10-exclude-cat-weighted.pth --path-graph [JSON FILE OF HIERARCHY] --analysis SoftEmbeddedDecisionRules```
 
-**To integrate neural-backed decision trees into your own neural network**, simply pip install this repository. (Coming soon: Download zip with prebuilt induced hierarchies for certain datasets. If no wnids, generate fake ones. Attempt to get path_graph, dataset.classes. Use a simple wrapper to run classification network as nbdt. Use custom tsl with a simple function call. For a new dataset, use cli to generate induced-hierarchy from checkpoint. TODO)
-
-```
-pip install nbdt
-wget ...  # CIFAR10 ResNet model
-nbdt --method=induced ...  # generate induced hierarchy
-```
-
-```
-from nbdt.loss import SoftTreeSupLoss
-
-criterion = ...   # your original loss function
-criterion = SoftTreeSupLoss(dataset='CIFAR10', criterion=criterion)
-```
-
-```
-# doesn't actually work this way atm
-from nbdt.model import SoftEmbeddedDecisionRules
-
-# during test time
-model = ...   # your original model
-model = SoftEmbeddedDecisionRules(dataset='CIFAR10', model=model)
-```
-
-**To reproduce experimental results**, start by cloning the repository and installing all requirements.
-
-```
-git clone git@github.com:alvinwan/neural-backed-decision-trees.git
-cd neural-backed-decision-trees
-pip install -r requirements.txt
-```
-
-To reproduce the core experimental results in our paper -- ignoring ablation studies -- simply run the following bash scripts:
-
-```
-bash scripts/generate_hierarchies_induced_wrn.sh
-bash scripts/train_wrn.sh
-bash scripts/eval_wrn.sh
-```
 
 The bash scripts above are explained in more detail in [Induced Hierarchy](https://github.com/alvinwan/neural-backed-decision-trees#Induced-Hierarchy), [Soft Tree Supervision Loss](https://github.com/alvinwan/neural-backed-decision-trees#Tree-Supervision-Loss), and [Soft Inference](https://github.com/alvinwan/neural-backed-decision-trees#Soft-Inference).
 
