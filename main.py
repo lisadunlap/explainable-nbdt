@@ -187,9 +187,8 @@ criterion = class_criterion(**loss_kwargs)
 
 keys = ['fc', 'linear']
 for key in keys:
-    try:
-        fc = getattr(net, key, None)
-    except Exception as e:
+    fc = getattr(net, key, None)
+    if fc is None:
         fc = getattr(net.module, key, None)
     if fc is not None:
         break
