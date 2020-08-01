@@ -15,7 +15,7 @@ python main.py --model ResNet12 --dataset CIFAR10ExcludeClasses --exclude-classe
 ```
 2. Induce Hierarchy:
  ```
- python generate_hierarchy.py --method induced --dataset CIFAR10 --ignore-labels 3 --induced-checkpoint ./checkpoint/ckpt-CIFAR10-exclude-cat.pth
+ python generate_hierarchy.py --method induced --dataset CIFAR10 --exclude-labels 3 --induced-checkpoint ./checkpoint/ckpt-CIFAR10-exclude-cat.pth
  ```
 3. Finetune with NBDT (`--freeze-conv` is optional): 
 ```

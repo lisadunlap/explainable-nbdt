@@ -141,9 +141,6 @@ if device == 'cuda':
     net = torch.nn.DataParallel(net)
     cudnn.benchmark = True
 
-for name, module in net._modules.items():
-    print(name)
-
 checkpoint_fname = args.checkpoint_fname or generate_fname(**vars(args))
 resume_path = args.path_resume or './checkpoint/{}.pth'.format(checkpoint_fname)
 if args.resume:

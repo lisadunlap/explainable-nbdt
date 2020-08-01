@@ -15,7 +15,7 @@ from nbdt.utils import (
 )
 from collections import defaultdict
 from nbdt.graph import get_wnids, read_graph, get_leaves, get_non_leaves, \
-    get_leaf_weights
+    get_leaf_weights, wnid_to_name
 from . import imagenet, cub
 from PIL import Image
 import torch.nn as nn
@@ -78,6 +78,10 @@ class Node:
 
         self.wnid = wnid
         self.wnids = get_wnids(path_wnids)
+        classes = [c if c != 'automobile' else 'car' for c in classes]
+        if len(classes) < len(self.wnids):
+            self.wnids = [w for w in self.wnids if wnid_to_name(w) in classes]
+        assert len(classes) == len(self.wnids)
         self.G = read_graph(path_graph)
 
         self.original_classes = classes
@@ -572,7 +576,7 @@ class ExcludeLabelsDataset(IncludeLabelsDataset):
     accepts_include_labels = False
     accepts_exclude_labels = True
 
-    def __init__(self, dataset, exclude_labels=(0,), drop_classes=False):
+    def __init__(self, dataset, exclude_labels=(0,), drop_classes=True):
         k = len(dataset.classes)
         include_labels = list(set(range(k)) - set(exclude_labels))
         super().__init__(

@@ -11,7 +11,6 @@ import torch
 import argparse
 import os
 from numpy import linalg as LA
-from induce import *
 
 def get_parser():
     import models
@@ -394,7 +393,7 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
         # closest = np.argmin(dist)
         
         # largest dot product
-        prods = [np.matmul(centers[i],label_vec.numpy()) for i in range(centers.shape[0])]
+        prods = [np.matmul(centers[i], label_vec.numpy()) for i in range(centers.shape[0])]
         closest = np.argmax(prods)
         
         print(closest, label)
