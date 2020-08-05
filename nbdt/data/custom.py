@@ -78,10 +78,25 @@ class Node:
 
         self.wnid = wnid
         self.wnids = get_wnids(path_wnids)
-        classes = [c if c != 'automobile' else 'car' for c in classes]
+        # adjust class names based on wnids
+        if self.path_wnids.split('/')[-2] == 'CIFAR10':
+            classes = [c if c != 'automobile' else 'car' for c in classes]
+        elif self.path_wnids.split('/')[-2] == 'CIFAR100':
+            classes.remove('boy')
+            classes.append('male_child')
+            classes.remove('couch')
+            classes.append('sofa')
+            classes.remove('dolphin')
+            classes.append('dolphinfish')
+            classes.remove('possum')
+            classes.append('opossum')
+            classes.remove('skunk')
+            classes.append('shutout')
+            classes = [c if '_t'not in c else c.split('_')[0] for c in classes ]
+
         if len(classes) < len(self.wnids):
             self.wnids = [w for w in self.wnids if wnid_to_name(w) in classes]
-        assert len(classes) == len(self.wnids)
+        assert len(classes) == len(self.wnids), f'{len(classes)} classes but {len(self.wnids)} wnids'
         self.G = read_graph(path_graph)
 
         self.original_classes = classes
