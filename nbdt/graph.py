@@ -418,9 +418,18 @@ def build_induced_graph(wnids, checkpoint, linkage='ward', affinity='euclidean',
 
 def build_self_induced_graph(wnids, checkpoint, ignore_labels=[], drop_classes=False, metric='naive', method='average', policy='wait', verbose=0):
     #metric = getattr(induce, metric)
-    if metric == 'naive':
-        metric = naive
-
+    #
+    #if metric == 'naive':
+    #    metric = naive
+    #elif metric == 'l2':
+    #    metric = l2
+    #elif metric == 'l1':
+    #    metric = l1
+    #elif metric == 'cos':
+    #    metric = cos
+    #else:
+    #    raise AttributeError('not found metric ', metric)
+    # now the metric would be passed as a string until simi take it, simi would do the proper coversion
     centers_all, bias_all = get_weight_bias(checkpoint)
     
     center_to_wnid = {}
