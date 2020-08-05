@@ -78,8 +78,6 @@ class Node:
 
         self.wnid = wnid
         self.wnids = get_wnids(path_wnids)
-        print([wnid_to_name(w) for w in self.wnids])
-        print(classes)
         # adjust class names based on wnids
         if self.path_wnids.split('/')[-2] == 'CIFAR10':
             classes = [c if c != 'automobile' else 'car' for c in classes]
@@ -99,6 +97,7 @@ class Node:
             if 'skunk' in classes:
                 classes.remove('skunk')
                 classes.append('shutout')
+
             classes = [c if '_t'not in c else c.split('_')[0] for c in classes ]
 
         if len(classes) < len(self.wnids):
