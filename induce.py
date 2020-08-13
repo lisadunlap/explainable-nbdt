@@ -351,17 +351,19 @@ return: similarity score between cls1 and cls2
 def simi(w, cls1, cls2, metric):
     """it metric as a method only used here, so we can savely make it a string and use accordingly"""
     v1, v2 = w[cls1,:], w[cls2,:]
-    if metric=='naive':
+    if metric == 'naive':
         metric = naive
         return sum(map(metric, list(zip(w[cls1, :], w[cls2, :]))))
-    elif metric=='l1':
+    elif metric == 'l1':
         return np.average(abs(v1-v2))
-    elif metric=='l2':
+    elif metric == 'l2':
         return np.average((v1-v2)**2)
-    elif metric=='cos':
+    elif metric == 'cos':
         return np.average(v1*v2)
-    elif metric=='euc':
+    elif metric == 'euc':
         return np.sqrt(sum((v1-v2)**2))
+    elif metric == 'poincare':
+        return np.arccosh(1 + 2*np.linalg.norm(v1-v2)*np.linalg.norm(v1-v2)/( (1-np.linalg.norm(v1)*np.linalg.norm(v1)) * (1-np.linalg.norm(v2)*np.linalg.norm(v2)) ))
     else:
         raise AttributeError('unknown metric ', metric)
 

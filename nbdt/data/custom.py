@@ -88,7 +88,7 @@ class Node:
             if 'couch' in classes:
                 classes.remove('couch')
                 classes.append('sofa')
-            if 'dolpin' in classes:
+            if 'dolphin' in classes:
                 classes.remove('dolphin')
                 classes.append('dolphinfish')
             if 'possum' in classes:
@@ -100,8 +100,35 @@ class Node:
 
             classes = [c if '_t'not in c else c.split('_')[0] for c in classes ]
 
+        elif self.path_wnids.split('/')[-2] == 'Animals_with_Attributes2':
+            classes = [ c.replace('+','_') for c in classes]
+            if 'polar_bear' in classes:
+                classes.remove('polar_bear')
+                classes.append('ice_bear')
+            if 'grizzly_bear' in classes:
+                classes.remove('grizzly_bear')
+                classes.append('grizzly')
+            if 'dolphin' in classes:
+                classes.remove('dolphin')
+                classes.append('dolphinfish')
+            if 'moose' in classes:
+                classes.remove('moose')
+                classes.append('elk')
+            if 'mole' in classes:
+                classes.remove('mole')
+                classes.append('gram_molecule')
+            if 'skunk' in classes:
+                classes.remove('skunk')
+                classes.append('rotter')
+            if 'buffalo' in classes:
+                classes.remove('buffalo')
+                classes.append('american_bison')
+
         if len(classes) < len(self.wnids):
             self.wnids = [w for w in self.wnids if wnid_to_name(w) in classes]
+
+        # print([wnid_to_name(w) for w in self.wnids])
+        # print(classes)
         assert len(classes) == len(self.wnids), f'{len(classes)} classes but {len(self.wnids)} wnids'
         self.G = read_graph(path_graph)
 
